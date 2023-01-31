@@ -9,6 +9,9 @@ on:
       create_efs:  
         type: boolean
         default: false
+      efs_prevent_destroy:
+        type: boolean
+        default: false
       efs_zone_mapping:
         type: string
 
@@ -26,3 +29,5 @@ jobs:
         stack_destroy: ${{ github.event.inputs.stack_destroy }}
         create_efs: ${{ github.event.inputs.create_efs }}
         efs_zone_mapping: ${{ github.event.inputs.efs_zone_mapping }}
+        efs_prevent_destroy: ${{ github.event.inputs.efs_prevent_destroy }}
+
