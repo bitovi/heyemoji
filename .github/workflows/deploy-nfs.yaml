@@ -8,12 +8,6 @@ on:
         default: false
       create_efs:  
         type: boolean
-      efs_prevent_destroy:
-        type: boolean
-      efs_zone_mapping:
-        type: string
-      create_efs:
-        type: boolean
       create_ha_efs:
         type: boolean
       create_efs_replica:
