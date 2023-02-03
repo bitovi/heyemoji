@@ -20,12 +20,14 @@ on:
         type: string
       replication_configuration_destination:
         type: string
-      mount_efs:
-        type: boolean
-      mount_efs_id:
+      targets:
         type: string
-      mount_efs_security_group_id:
-        type: string
+      # mount_efs:
+      #   type: boolean
+      # mount_efs_id:
+      #   type: string
+      # mount_efs_security_group_id:
+      #   type: string
 
 jobs:
   deploy:
@@ -49,3 +51,4 @@ jobs:
         mount_efs: ${{ github.event.inputs.mount_efs }}
         mount_efs_id: ${{ github.event.inputs.mount_efs_id }}
         mount_efs_security_group_id: ${{ github.event.inputs.mount_efs_security_group_id }}
+        targets: ${{ github.event.inputs.targets }}
