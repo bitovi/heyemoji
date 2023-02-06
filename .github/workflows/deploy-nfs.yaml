@@ -3,9 +3,9 @@ name: Deploy HeyEmoji (Testing)
 on:
   workflow_dispatch:
     inputs:
-      # stack_destroy:  
-      #   type: boolean
-      #   default: false
+      stack_destroy:  
+        type: boolean
+        default: false
       create_efs:  
         type: boolean
       create_ha_efs:
