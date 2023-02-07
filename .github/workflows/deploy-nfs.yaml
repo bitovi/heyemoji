@@ -40,7 +40,7 @@ jobs:
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID_SANDBOX}}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY_SANDBOX}}
         aws_default_region: us-east-1
-        # stack_destroy: ${{ github.event.inputs.stack_destroy }}
+        stack_destroy: ${{ github.event.inputs.stack_destroy }}
         create_efs: ${{ github.event.inputs.create_efs }}
         create_ha_efs: ${{ github.event.inputs.create_ha_efs }}
         create_efs_replica: ${{ github.event.inputs.create_efs_replica }}
