@@ -20,8 +20,8 @@ on:
         type: string
       replication_configuration_destination:
         type: string
-      aws_default_region:
-        type: string
+      # aws_default_region:
+      #   type: string
       # mount_efs:
       #   type: boolean
       # mount_efs_id:
@@ -39,7 +39,7 @@ jobs:
       with:
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID_SANDBOX}}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY_SANDBOX}}
-        aws_default_region: ${{ github.event.inputs.aws_default_region }}
+        # aws_default_region: ${{ github.event.inputs.aws_default_region }}
         stack_destroy: ${{ github.event.inputs.stack_destroy }}
         create_efs: ${{ github.event.inputs.create_efs }}
         create_ha_efs: ${{ github.event.inputs.create_ha_efs }}
