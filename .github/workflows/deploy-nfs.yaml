@@ -6,28 +6,26 @@ on:
       stack_destroy:  
         type: boolean
         default: false
-      create_efs:  
-        type: boolean
-      create_ha_efs:
-        type: boolean
-      create_efs_replica:
-        type: boolean
-      enable_efs_backup_policy:
-        type: boolean
-      efs_zone_mapping:
-        type: string
-      efs_transition_to_inactive:
-        type: string
-      replication_configuration_destination:
-        type: string
+      # create_efs:  
+      #   type: boolean
+      # create_ha_efs:
+      #   type: boolean
+      # create_efs_replica:
+      #   type: boolean
+      # enable_efs_backup_policy:
+      #   type: boolean
+      # efs_zone_mapping:
+      #   type: string
+      # efs_transition_to_inactive:
+      #   type: string
+      # replication_configuration_destination:
+      #   type: string
       # aws_default_region:
       #   type: string
-      # mount_efs:
-      #   type: boolean
-      # mount_efs_id:
-      #   type: string
-      # mount_efs_security_group_id:
-      #   type: string
+      mount_efs_id:
+        type: string
+      mount_efs_security_group_id:
+        type: string
 
 jobs:
   deploy:
@@ -48,7 +46,6 @@ jobs:
         efs_zone_mapping: ${{ github.event.inputs.efs_zone_mapping }}
         efs_transition_to_inactive: ${{ github.event.inputs.efs_transition_to_inactive }}
         replication_configuration_destination: ${{ github.event.inputs.replication_configuration_destination }}
-        mount_efs: ${{ github.event.inputs.mount_efs }}
         mount_efs_id: ${{ github.event.inputs.mount_efs_id }}
         mount_efs_security_group_id: ${{ github.event.inputs.mount_efs_security_group_id }}
         targets: ${{ github.event.inputs.targets }}
