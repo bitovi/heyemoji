@@ -3,10 +3,6 @@ name: Deploy Community HeyEmoji
 on:
   workflow_dispatch:
     inputs:
-      aws-default-region:
-        type: string
-        description: AWS Region targeted for deployment
-        default: us-east-1
       destroy:
         type: choice
         options:
@@ -21,12 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - id: deploy
-      uses: bitovi/github-actions-deploy-docker-to-ec2@v0.1.0
+      uses: bitovi/github-actions-deploy-docker-to-ec2@v0.4.6
       with:
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID_HEYEMOJI }}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY_HEYEMOJI }}
-        aws_default_region: ${{ github.event.inputs.aws-default-region }}
         dot_env: ${{ secrets.DOT_ENV_COMMUNITY }}
         app_port: 3334
-        tf_state_bucket: bitovi-community-heyemoji-tf-state
         stack_destroy: ${{ github.event.inputs.destroy }}
