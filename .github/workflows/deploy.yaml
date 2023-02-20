@@ -25,4 +25,3 @@ jobs:
         ghv_env: ${{ vars.DOT_ENV_INTERNAL }}
         app_port: 3334
         stack_destroy: ${{ github.event.inputs.destroy }}
-        aws_create_efs: ${{ github.event.inputs.aws_create_efs }}
