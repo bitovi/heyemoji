@@ -1,4 +1,4 @@
-name: Deploy HeyEmoji to AWS using the BitOps Github Action
+name: Deploy or Destroy HeyEmoji (AWS:EC2)
 
 on:
   workflow_dispatch:
@@ -8,12 +8,6 @@ on:
         options:
           - false
           - true
-      aws_create_efs:
-        type: choice
-        options:
-          - false
-          - true
-
 
 permissions:
   contents: read
