@@ -8,6 +8,8 @@ on:
         options:
           - false
           - true
+      mount_efs_id:
+        type: string
 
 permissions:
   contents: read
@@ -25,3 +27,4 @@ jobs:
         ghv_env: ${{ vars.DOT_ENV_INTERNAL }}
         app_port: 3334
         stack_destroy: ${{ github.event.inputs.destroy }}
+        aws_mount_efs_id: ${{ github.event.inputs.mount_efs_id }}
