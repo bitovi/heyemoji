@@ -14,6 +14,16 @@ const (
 	maxLeaderEntries = 10
 )
 
+var loc *time.Location
+
+func init(){
+	var err error
+	loc, err = time.LoadLocation("UTC")
+	if err != nil {
+        panic(err)
+    }
+}
+
 func NewLeaderHandler(db database.Driver) LeaderHandler {
 	return LeaderHandler{db: db}
 }
@@ -40,29 +50,56 @@ func (h LeaderHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
 	ev, _ := e.Data.(*slack.MessageEvent)
 
 	var header string
-	start := time.Now()
+
+	start := time.Now().In(loc)
+    standardizedStart := time.Date(
+        start.Year(), start.Month(), start.Day(),
+        0, 0, 0, 0,
+        loc,
+    )
+	
+	var targetTime time.Time
+	
 	if strings.Contains(ev.Text, "day") {
-		start = start.AddDate(0, 0, -1)
+		targetTime = standardizedStart.AddDate(0, 0, -1)
 		header = "Today's Leaderboard"
 	} else if strings.Contains(ev.Text, "week") {
-		start = start.AddDate(0, 0, -7)
+		offset := (int(standardizedStart.Weekday()) + 6) % 7 // Monday=0
+		targetTime = standardizedStart.AddDate(0, 0, -offset)
 		header = "This Week's Leaderboard"
 	} else if strings.Contains(ev.Text, "year") {
-		start = start.AddDate(0, 0, -365)
+		// Get the day that started the year
+		targetTime = time.Date(
+			start.Year(), 1, 1,
+			0, 0, 0, 0,
+			loc,
+		)
 		header = "This Year's Leaderboard"
+
 	} else if strings.Contains(ev.Text, "quarter") {
-		start = start.AddDate(0, 0, -91)
+		month := ((int(start.Month())-1)/3)*3 + 1
+		targetTime = time.Date(
+			start.Year(), time.Month(month), 1,
+			0, 0, 0, 0,
+			loc,
+		)
 		header = "This Quarter's Leaderboard"
-	} else if strings.Contains(ev.Text, "all") {
-		start = start.AddDate(-99, 0, 0)
+	
+	
+		} else if strings.Contains(ev.Text, "all") {
+		targetTime = standardizedStart.AddDate(-100, 0, 0)
 		header = "All Time Leaderboard"
 	} else {
 		/* Default to Month */
-		start = start.AddDate(0, 0, -30)
+		targetTime = time.Date(
+			start.Year(), start.Month(), 1,
+			0, 0, 0, 0,
+			loc,
+		)
 		header = "This Month's Leaderboard"
 	}
 
-	leaders, err := h.db.QueryLeaderboard(start)
+	leaders, err := h.db.QueryLeaderboard(targetTime)
 	if err != nil {
 		return false
 	}
