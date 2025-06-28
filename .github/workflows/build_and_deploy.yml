@@ -1,0 +1,21 @@
+name: Build and Deploy HeyEmoji
+
+on:
+  push:
+    branches: ['main']
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push-image:
+    uses: ./.github/workflows/build_and_publish.yml
+    secrets: inherit
+
+  deploy:
+    needs: build-and-push-image
+    uses: ./.github/workflows/deploy.yml
+    with:
+      image_tag: ${{ needs.build-and-push-image.outputs.image_tag }}
+    secrets: inherit

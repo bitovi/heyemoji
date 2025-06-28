@@ -1,0 +1,42 @@
+name: Deploy HeyEmoji
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: hashicorp/setup-terraform@v3
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_HEYEMOJI }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_HEYEMOJI }}
+        aws-region: us-east-1
+
+    - name: Terraform fmt
+      id: fmt
+      run: terraform fmt -check
+      continue-on-error: true
+      working-directory: infra/
+
+    # - name: Terraform Init
+    #   id: init
+    #   run: terraform init -input=false
+
+    # - name: Terraform Validate
+    #   id: validate
+    #   run: terraform validate -no-color
+
+    # - name: Terraform Plan
+    #   id: plan
+    #   run: terraform plan -no-color -input=false
+    #   continue-on-error: true
+

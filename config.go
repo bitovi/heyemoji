@@ -37,8 +37,7 @@ func readConfig() *Config {
 		SlackEmoji:    		viper.GetString("slack_emoji"),
 		SlackDailyCap: 		viper.GetInt("slack_daily_cap"),
 		WebSocketPort: 		viper.GetInt("websocket_port"),
-		WebSocketPort: 		viper.GetInt("websocket_port"),
-		MaxLeaderEntries: 	viper.GetInt("max_leader_entries")
+		MaxLeaderEntries: 	viper.GetInt("max_leader_entries"),
 	}
 
 	c.SlackEmojiMap = createEmojiValueMap(c.SlackEmoji)
@@ -62,10 +61,6 @@ func createEmojiValueMap(e string) map[string]int {
 			evalues[emoji] = karma
 		}
 	}
-
-	sort.Slice(evalues, func(i, j int) bool {
-        return evalues[i].Value > evalues[j].Value
-    })
 	
 	return evalues
 }
