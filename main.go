@@ -21,7 +21,7 @@ func main() {
 
 	handlers := []event.EventHandler{
 		event.PingHandler{},
-		event.NewLeaderHandler(db),
+		event.NewLeaderHandler(cfg.MaxLeaderEntries, db),
 		event.NewHelpHandler(cfg.SlackDailyCap, cfg.SlackEmojiMap),
 		event.NewPointsHandler(cfg.SlackDailyCap, db),
 		event.NewEmojiHandler(cfg.SlackEmojiMap, cfg.SlackDailyCap, db),

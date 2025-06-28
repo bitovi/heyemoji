@@ -8,13 +8,14 @@ import (
 )
 
 type Config struct {
-	BotName       string
-	DatabasePath  string
-	SlackToken    string
-	SlackEmoji    string
-	SlackEmojiMap map[string]int
-	SlackDailyCap int
-	WebSocketPort int
+	BotName       		string
+	DatabasePath  		string
+	SlackToken    		string
+	SlackEmoji    		string
+	SlackEmojiMap 		map[string]int
+	SlackDailyCap 		int
+	WebSocketPort 		int
+	MaxLeaderEntries 	int
 }
 
 func readConfig() *Config {
@@ -27,14 +28,17 @@ func readConfig() *Config {
 	viper.SetDefault("slack_emoji", "star:1")
 	viper.SetDefault("slack_daily_cap", 5)
 	viper.SetDefault("websocket_port", 3334)
+	viper.SetDefault("max_leader_entries", 10)
 
 	c := &Config{
-		BotName:       viper.GetString("bot_name"),
-		DatabasePath:  viper.GetString("database_path"),
-		SlackToken:    viper.GetString("slack_token"),
-		SlackEmoji:    viper.GetString("slack_emoji"),
-		SlackDailyCap: viper.GetInt("slack_daily_cap"),
-		WebSocketPort: viper.GetInt("websocket_port"),
+		BotName:       		viper.GetString("bot_name"),
+		DatabasePath:  		viper.GetString("database_path"),
+		SlackToken:    		viper.GetString("slack_token"),
+		SlackEmoji:    		viper.GetString("slack_emoji"),
+		SlackDailyCap: 		viper.GetInt("slack_daily_cap"),
+		WebSocketPort: 		viper.GetInt("websocket_port"),
+		WebSocketPort: 		viper.GetInt("websocket_port"),
+		MaxLeaderEntries: 	viper.GetInt("max_leader_entries")
 	}
 
 	c.SlackEmojiMap = createEmojiValueMap(c.SlackEmoji)
@@ -58,5 +62,10 @@ func createEmojiValueMap(e string) map[string]int {
 			evalues[emoji] = karma
 		}
 	}
+
+	sort.Slice(evalues, func(i, j int) bool {
+        return evalues[i].Value > evalues[j].Value
+    })
+	
 	return evalues
 }

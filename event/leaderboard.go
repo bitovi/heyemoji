@@ -10,11 +10,10 @@ import (
 	"github.com/slack-go/slack"
 )
 
-const (
-	maxLeaderEntries = 10
+var (
+	loc *time.Location
+	MaxLeaderEntries int
 )
-
-var loc *time.Location
 
 func init(){
 	var err error
@@ -24,7 +23,8 @@ func init(){
     }
 }
 
-func NewLeaderHandler(db database.Driver) LeaderHandler {
+func NewLeaderHandler(maxLeaderEntries int, db database.Driver) LeaderHandler {
+	MaxLeaderEntries = maxLeaderEntries
 	return LeaderHandler{db: db}
 }
 
@@ -116,7 +116,7 @@ func (h LeaderHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
 func (h LeaderHandler) handleSuccess(ev *slack.MessageEvent, rtm *slack.RTM, leaders map[string]int, header string) error {
 	rank := h.rankMapStringInt(leaders)
 	msg := fmt.Sprintf(">*%s*\n", header)
-	for i := 0; i < len(rank) && i < maxLeaderEntries; i++ {
+	for i := 0; i < len(rank) && i < MaxLeaderEntries; i++ {
 		name := rank[i]
 		uinfo, err := rtm.GetUserInfo(rank[i])
 		if err == nil {
