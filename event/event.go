@@ -5,12 +5,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/socketmode"
 )
 
+type Message struct {
+	User    string
+	Text    string
+	Channel string
+	BotID   string
+}
+
 type EventHandler interface {
-	Matches(slack.RTMEvent, *slack.RTM) bool
-	Execute(slack.RTMEvent, *slack.RTM) bool
+	Matches(*Message, *socketmode.Client) bool
+	Execute(*Message, *socketmode.Client) bool
 }
 
 const (
@@ -18,36 +25,35 @@ const (
 	userMentionFormat   = "<@%s>"
 )
 
-func IsBotMentioned(event *slack.MessageEvent, rtm *slack.RTM) bool {
-	info := rtm.GetInfo()
-	return strings.Contains(event.Text, fmt.Sprintf(userMentionFormat, info.User.ID))
+// BotID holds the authenticated bot user ID used to detect mentions.
+// Set during startup to help identify the bot user in messages.
+var BotID string
+var BotName string
+
+func IsBotMentioned(event *Message, botID string) bool {
+	return strings.Contains(event.Text, fmt.Sprintf(userMentionFormat, botID))
 }
 
-func IsDirectMessage(event *slack.MessageEvent) bool {
+func IsDirectMessage(event *Message) bool {
 	return strings.HasPrefix(event.Channel, directChannelMarker)
 }
 
-func IsBotMessage(msg slack.RTMEvent) bool {
-	msgEvent, ok := msg.Data.(*slack.MessageEvent)
-	if !ok {
+func IsBotMessage(msg *Message) bool {
+	if msg == nil {
 		return true
 	}
-	return msgEvent.BotID != ""
+	return msg.BotID != ""
 }
 
 // Get last point reset time
 func LastPointReset() time.Time {
-	reset := time.Now()
-	reset = time.Date(reset.Year(), reset.Month(), reset.Day(), 0, 0, 0, 0, reset.Location())
-	return reset
+	now := time.Now().UTC()
+	return now.Truncate(24 * time.Hour)
 }
 
 // Get next point reset time
 func NextPointReset() time.Time {
-	now := time.Now()
-	reset := now.AddDate(0, 0, 1)
-	reset = time.Date(reset.Year(), reset.Month(), reset.Day(), 0, 0, 0, 0, reset.Location())
-	return reset
+	return LastPointReset().Add(24 * time.Hour)
 }
 
 // Get time till the next emoji reset

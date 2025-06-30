@@ -9,6 +9,7 @@ import (
 	"github.com/mmcdole/heyemoji/database"
 
 	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/socketmode"
 )
 
 var userRegex = regexp.MustCompile("<@[A-Z0-9]{2,}>")
@@ -24,9 +25,8 @@ type EmojiHandler struct {
 	re       *regexp.Regexp
 }
 
-func (h EmojiHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
-	msg, ok := e.Data.(*slack.MessageEvent)
-	if !ok {
+func (h EmojiHandler) Matches(msg *Message, client *socketmode.Client) bool {
+	if msg == nil {
 		return false
 	}
 	// Message contains one of the pre-defined slack emojis
@@ -36,8 +36,7 @@ func (h EmojiHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
 	return false
 }
 
-func (h EmojiHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
-	ev, _ := e.Data.(*slack.MessageEvent)
+func (h EmojiHandler) Execute(ev *Message, client *socketmode.Client) bool {
 
 	emojis := h.parseEmojis(ev.Text)
 	if len(emojis) <= 0 {
@@ -46,19 +45,19 @@ func (h EmojiHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
 
 	users := h.parseUsers(ev.Text)
 	if len(users) <= 0 {
-		h.handleNoRecipient(ev, rtm, emojis)
+		h.handleNoRecipient(ev, client, emojis)
 		return true
 	}
 
 	if IsDirectMessage(ev) {
-		h.handleDirectMessage(ev, rtm)
+		h.handleDirectMessage(ev, client)
 		return true
 	}
 
 	required := h.getRequiredKarma(emojis, len(users))
 	balance := h.getKarmaBalance(ev.User)
 	if balance < required {
-		h.handleInsufficientKarma(ev, rtm, balance, required, emojis, users)
+		h.handleInsufficientKarma(ev, client, balance, required, emojis, users)
 		return true
 	}
 
@@ -66,18 +65,18 @@ func (h EmojiHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
 		return val != ev.User
 	})
 	if len(filteredUsers) != len(users) {
-		h.handleSelfKarma(ev, rtm)
+		h.handleSelfKarma(ev, client)
 	}
 
 	if len(filteredUsers) > 0 {
-		h.handleSuccess(ev, rtm, emojis, filteredUsers)
+		h.handleSuccess(ev, client, emojis, filteredUsers)
 		return true
 	}
 
 	return false
 }
 
-func (h EmojiHandler) handleSuccess(ev *slack.MessageEvent, rtm *slack.RTM, emojis []string, users []string) error {
+func (h EmojiHandler) handleSuccess(ev *Message, client *socketmode.Client, emojis []string, users []string) error {
 
 	karmaPerUser := h.getRequiredKarma(emojis, 1)
 	for _, user := range users {
@@ -94,7 +93,7 @@ func (h EmojiHandler) handleSuccess(ev *slack.MessageEvent, rtm *slack.RTM, emoj
 		karmaPerUser,
 		balance)
 
-	_, _, err := rtm.PostMessage(
+	_, _, err := client.Client.PostMessage(
 		ev.User,
 		slack.MsgOptionEnableLinkUnfurl(),
 		slack.MsgOptionText(msg, false),
@@ -103,8 +102,8 @@ func (h EmojiHandler) handleSuccess(ev *slack.MessageEvent, rtm *slack.RTM, emoj
 	return err
 }
 
-func (h EmojiHandler) handleSelfKarma(ev *slack.MessageEvent, rtm *slack.RTM) error {
-	_, err := rtm.PostEphemeral(
+func (h EmojiHandler) handleSelfKarma(ev *Message, client *socketmode.Client) error {
+	_, err := client.Client.PostEphemeral(
 		ev.Channel,
 		ev.User,
 		slack.MsgOptionText("Sorry, you can only give emoji points to other people on your team.", false),
@@ -112,18 +111,18 @@ func (h EmojiHandler) handleSelfKarma(ev *slack.MessageEvent, rtm *slack.RTM) er
 	return err
 }
 
-func (h EmojiHandler) handleDirectMessage(ev *slack.MessageEvent, rtm *slack.RTM) error {
-	_, _, err := rtm.PostMessage(
+func (h EmojiHandler) handleDirectMessage(ev *Message, client *socketmode.Client) error {
+	_, _, err := client.Client.PostMessage(
 		ev.Channel,
 		slack.MsgOptionText("Sorry, you can only give people emoji points in channels.", false),
 	)
 	return err
 }
 
-func (h EmojiHandler) handleNoRecipient(ev *slack.MessageEvent, rtm *slack.RTM, emojis []string) error {
+func (h EmojiHandler) handleNoRecipient(ev *Message, client *socketmode.Client, emojis []string) error {
 	msg := fmt.Sprintf("Give someone that :%s: by adding it after their username, like this: @username :%s:", emojis[0], emojis[0])
 
-	_, err := rtm.PostEphemeral(
+	_, err := client.Client.PostEphemeral(
 		ev.Channel,
 		ev.User,
 		slack.MsgOptionText(msg, false),
@@ -131,7 +130,7 @@ func (h EmojiHandler) handleNoRecipient(ev *slack.MessageEvent, rtm *slack.RTM, 
 	return err
 }
 
-func (h EmojiHandler) handleInsufficientKarma(ev *slack.MessageEvent, rtm *slack.RTM, balance int, required int, emojis []string, users []string) error {
+func (h EmojiHandler) handleInsufficientKarma(ev *Message, client *socketmode.Client, balance int, required int, emojis []string, users []string) error {
 	msg := fmt.Sprintf("Whoops! You tried to give *%d* emoji point(s). "+
 		"You have *%d* point(s) left to give today. "+
 		"Your point balance will reset in *%s*.",
@@ -139,7 +138,7 @@ func (h EmojiHandler) handleInsufficientKarma(ev *slack.MessageEvent, rtm *slack
 		balance,
 		FmtDuration(TimeTillPointReset()))
 
-	_, err := rtm.PostEphemeral(
+	_, err := client.Client.PostEphemeral(
 		ev.Channel,
 		ev.User,
 		slack.MsgOptionText(msg, false),

@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/google/uuid v1.1.2
+	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/shomali11/slacker v0.0.0-20200610181250-3156f073f291
 	github.com/slack-go/slack v0.11.4
 	github.com/spf13/viper v1.7.0
