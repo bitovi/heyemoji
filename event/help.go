@@ -6,6 +6,7 @@ import (
 	"text/template"
 
 	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/socketmode"
 )
 
 type HelpHandler struct {
@@ -17,12 +18,11 @@ func NewHelpHandler(dailyCap int, emojiMap map[string]int) HelpHandler {
 	return HelpHandler{dailyCap: dailyCap, emojiMap: emojiMap}
 }
 
-func (h HelpHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
-	msg, ok := e.Data.(*slack.MessageEvent)
-	if !ok {
+func (h HelpHandler) Matches(msg *Message, client *socketmode.Client) bool {
+	if msg == nil {
 		return false
 	}
-	if !IsBotMentioned(msg, rtm) && !IsDirectMessage(msg) {
+	if !IsBotMentioned(msg, BotID) && !IsDirectMessage(msg) {
 		return false
 	}
 	if strings.Contains(strings.ToLower(msg.Text), "help") {
@@ -31,7 +31,7 @@ func (h HelpHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
 	return false
 }
 
-func (h HelpHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
+func (h HelpHandler) Execute(e *Message, client *socketmode.Client) bool {
 	tmp := `>*Directions*
 >Add a recognition emoji after someone's username like this: *@username Great job!* :{{index .Emoji 0}}:. Everyone has {{.DailyCap}} emoji points to give out per day and can only give them in the channels I've been invited to.
 >*Recognition Emoji*
@@ -55,14 +55,13 @@ func (h HelpHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
 		EmojiMap map[string]int
 		DailyCap int
 	}{
-		rtm.GetInfo().User.Name,
+		BotName,
 		Keys(h.emojiMap),
 		h.emojiMap,
 		h.dailyCap,
 	})
 
-	msg, _ := e.Data.(*slack.MessageEvent)
-	rtm.SendMessage(rtm.NewOutgoingMessage(helpStr.String(), msg.Channel))
+	client.Client.PostMessage(e.Channel, slack.MsgOptionText(helpStr.String(), false))
 
 	return true
 }

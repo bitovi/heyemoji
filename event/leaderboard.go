@@ -8,19 +8,20 @@ import (
 
 	"github.com/mmcdole/heyemoji/database"
 	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/socketmode"
 )
 
 var (
-	loc *time.Location
+	loc              *time.Location
 	MaxLeaderEntries int
 )
 
-func init(){
+func init() {
 	var err error
 	loc, err = time.LoadLocation("UTC")
 	if err != nil {
-        panic(err)
-    }
+		panic(err)
+	}
 }
 
 func NewLeaderHandler(maxLeaderEntries int, db database.Driver) LeaderHandler {
@@ -32,12 +33,11 @@ type LeaderHandler struct {
 	db database.Driver
 }
 
-func (h LeaderHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
-	msg, ok := e.Data.(*slack.MessageEvent)
-	if !ok {
+func (h LeaderHandler) Matches(msg *Message, client *socketmode.Client) bool {
+	if msg == nil {
 		return false
 	}
-	if !IsBotMentioned(msg, rtm) && !IsDirectMessage(msg) {
+	if !IsBotMentioned(msg, BotID) && !IsDirectMessage(msg) {
 		return false
 	}
 	if strings.Contains(strings.ToLower(msg.Text), "leaderboard") {
@@ -46,20 +46,19 @@ func (h LeaderHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
 	return false
 }
 
-func (h LeaderHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
-	ev, _ := e.Data.(*slack.MessageEvent)
+func (h LeaderHandler) Execute(ev *Message, client *socketmode.Client) bool {
 
 	var header string
 
 	start := time.Now().In(loc)
-    standardizedStart := time.Date(
-        start.Year(), start.Month(), start.Day(),
-        0, 0, 0, 0,
-        loc,
-    )
-	
+	standardizedStart := time.Date(
+		start.Year(), start.Month(), start.Day(),
+		0, 0, 0, 0,
+		loc,
+	)
+
 	var targetTime time.Time
-	
+
 	if strings.Contains(ev.Text, "day") {
 		targetTime = standardizedStart.AddDate(0, 0, -1)
 		header = "Today's Leaderboard"
@@ -84,9 +83,8 @@ func (h LeaderHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
 			loc,
 		)
 		header = "This Quarter's Leaderboard"
-	
-	
-		} else if strings.Contains(ev.Text, "all") {
+
+	} else if strings.Contains(ev.Text, "all") {
 		targetTime = standardizedStart.AddDate(-100, 0, 0)
 		header = "All Time Leaderboard"
 	} else {
@@ -105,20 +103,20 @@ func (h LeaderHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
 	}
 
 	if len(leaders) == 0 {
-		h.handleEmptyLeaderboard(ev, rtm)
+		h.handleEmptyLeaderboard(ev, client)
 		return true
 	}
 
-	h.handleSuccess(ev, rtm, leaders, header)
+	h.handleSuccess(ev, client, leaders, header)
 	return true
 }
 
-func (h LeaderHandler) handleSuccess(ev *slack.MessageEvent, rtm *slack.RTM, leaders map[string]int, header string) error {
+func (h LeaderHandler) handleSuccess(ev *Message, client *socketmode.Client, leaders map[string]int, header string) error {
 	rank := h.rankMapStringInt(leaders)
 	msg := fmt.Sprintf(">*%s*\n", header)
 	for i := 0; i < len(rank) && i < MaxLeaderEntries; i++ {
 		name := rank[i]
-		uinfo, err := rtm.GetUserInfo(rank[i])
+		uinfo, err := client.Client.GetUserInfo(rank[i])
 		if err == nil {
 			name = uinfo.RealName
 		}
@@ -128,12 +126,12 @@ func (h LeaderHandler) handleSuccess(ev *slack.MessageEvent, rtm *slack.RTM, lea
 	msg += "> You can view other leaderboards! :tada:\n"
 	msg += "> *leaderboard <day | week | month>*"
 
-	rtm.SendMessage(rtm.NewOutgoingMessage(msg, ev.Channel))
+	client.Client.PostMessage(ev.Channel, slack.MsgOptionText(msg, false))
 	return nil
 }
 
-func (h LeaderHandler) handleEmptyLeaderboard(ev *slack.MessageEvent, rtm *slack.RTM) error {
-	_, err := rtm.PostEphemeral(
+func (h LeaderHandler) handleEmptyLeaderboard(ev *Message, client *socketmode.Client) error {
+	_, err := client.Client.PostEphemeral(
 		ev.Channel,
 		ev.User,
 		slack.MsgOptionText("Nobody has given any emoji points yet!", false),
