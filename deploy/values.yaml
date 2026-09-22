@@ -1,0 +1,49 @@
+# heyemoji (Slack-facing name: HeyBitovi) — PRODUCTION.
+#
+# The platform app interface: one file describing the whole app (spec:
+# bitovi-platform-services/charts/interface.yaml).
+#
+# `secrets: op://bitovi-platform/heyemoji-secrets` pulls a Kubernetes Secret
+# from this 1Password item and injects it via envFrom, so its field labels
+# must match these env var names exactly:
+#   HEY_SLACK_BOT_TOKEN      - Bot User OAuth Token (xoxb-...)
+#   HEY_SLACK_APP_TOKEN      - Socket Mode app-level token (xapp-..., connections:write scope)
+#   HEY_GOOGLE_CLIENT_ID     - Google OAuth Client ID (web UI sign-in)
+#   HEY_GOOGLE_CLIENT_SECRET - Google OAuth Client Secret
+#   HEY_SESSION_SECRET       - random string that signs the web UI's session cookie
+#
+# HEY_TEST_MODE and HEY_WEB_AUTH_DISABLED are deliberately pinned to "false"
+# below (not just left unset) so production never silently runs with an
+# unlimited give cap or a web UI open to anyone with no sign-in.
+name: heyemoji
+repo: bitovi/heyemoji
+
+workloads:
+  main:
+    kind: server
+    port: 8080
+    health: /healthz
+    domain: heybitovi.bitovi-tools.com
+    image: {}
+    env:
+      HEY_BOT_NAME: HeyBitovi
+      HEY_BASE_URL: https://heybitovi.bitovi-tools.com
+      HEY_HTTP_PORT: "8080"
+      HEY_SLACK_EMOJI: star:1
+      HEY_SLACK_DAILY_CAP: "5"
+      HEY_MAX_LEADER_ENTRIES: "10"
+      HEY_GOOGLE_ALLOWED_DOMAIN: bitovi.com
+      HEY_TEST_MODE: "false"
+      HEY_WEB_AUTH_DISABLED: "false"
+    secrets: op://bitovi-platform/heyemoji-secrets
+    uses:
+      - db
+
+dependencies:
+  db:
+    type: postgres
+    storage: 1Gi
+    backup: true
+
+infra:
+  hostedZone: bitovi-tools-com

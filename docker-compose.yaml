@@ -1,13 +1,32 @@
-version: '3.9'
 services:
   app:
-    container_name: heyemoji-bitops
+    container_name: heyemoji
     env_file: .env
     restart: always
     build: .
     ports:
-      - 3334:3334
-    stdin_open: true
-    tty: true
+      - "${HEY_HTTP_PORT:-8080}:${HEY_HTTP_PORT:-8080}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    container_name: heyemoji-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: heyemoji
+      POSTGRES_PASSWORD: heyemoji
+      POSTGRES_DB: heyemoji
+    ports:
+      - "5432:5432"
     volumes:
-      - $HOST_DIR:$TARGET_DIR
+      - heyemoji-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heyemoji"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  heyemoji-postgres-data:

@@ -1,0 +1,45 @@
+{{define "leaderboard.html"}}
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Leaderboard - HeyBitovi</title>
+{{template "fonts"}}
+{{template "styles"}}
+</head>
+<body>
+{{template "nav" .}}
+<main>
+<h1>{{.Header}}</h1>
+<div class="periods">
+  {{range .Periods}}<a href="/app/leaderboard?period={{.}}"{{if eq . $.Period}} class="active"{{end}}>{{.}}</a>{{end}}
+  {{if .Pickable}}
+  <select class="when-picker" onchange="location.href='/app/leaderboard?period={{.Period}}&when='+this.value">
+    {{range .Options}}<option value="{{.Value}}"{{if eq .Value $.SelectedWhen}} selected{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  {{end}}
+</div>
+<div class="card">
+{{if not .Rows}}
+  <p class="empty">Nobody has given any emoji points yet for this period.</p>
+{{else}}
+<table>
+  <thead><tr><th class="rank-cell">Rank</th><th>Name</th><th>Points</th></tr></thead>
+  <tbody>
+  {{range .Rows}}
+  <tr>
+    <td class="rank-cell"><span class="rank-badge{{if eq .Rank 1}} first{{end}}">{{.Rank}}</span></td>
+    <td>{{.Name}}</td>
+    <td><span class="points-pill">{{.Points}} pt{{if ne .Points 1}}s{{end}}</span></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+</div>
+</main>
+{{template "footer" .}}
+</body>
+</html>
+{{end}}

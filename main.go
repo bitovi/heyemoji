@@ -1,54 +1,121 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
-	"os"
+	"strings"
 
-	"github.com/mmcdole/heyemoji/database"
-	"github.com/mmcdole/heyemoji/event"
+	"github.com/bitovi/heyemoji/database/postgres"
+	"github.com/bitovi/heyemoji/event"
+	"github.com/bitovi/heyemoji/web"
 	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/socketmode"
 )
 
 func main() {
-
 	cfg := readConfig()
-	db := database.NewJSONLineDriver(cfg.DatabasePath, 5000)
+	ctx := context.Background()
 
-	if err := db.Open(); err != nil {
-		log.Fatalf("Failed to open db: %v", err)
-	}
-
-	handlers := []event.EventHandler{
-		event.PingHandler{},
-		event.NewLeaderHandler(cfg.MaxLeaderEntries, db),
-		event.NewHelpHandler(cfg.SlackDailyCap, cfg.SlackEmojiMap),
-		event.NewPointsHandler(cfg.SlackDailyCap, db),
-		event.NewEmojiHandler(cfg.SlackEmojiMap, cfg.SlackDailyCap, db),
+	db := postgres.New(cfg.DatabaseURL)
+	if err := db.Open(ctx); err != nil {
+		log.Fatalf("failed to open database: %v", err)
 	}
 
 	api := slack.New(
-		cfg.SlackToken,
-		slack.OptionDebug(true),
-		slack.OptionLog(log.New(os.Stdout, "slack-bot: ", log.Lshortfile|log.LstdFlags)),
+		cfg.SlackBotToken,
+		slack.OptionAppLevelToken(cfg.SlackAppToken),
 	)
+	client := socketmode.New(api)
 
-	rtm := api.NewRTM()
-	go rtm.ManageConnection()
+	if cfg.TestMode {
+		log.Println("TEST MODE ENABLED (HEY_TEST_MODE=true): daily give cap is disabled")
+	}
 
-	for msg := range rtm.IncomingEvents {
-		fmt.Print("Event Received: ")
-		fmt.Printf("Message: %v\n", msg.Data)
-		if event.IsBotMessage(msg) {
-			continue
-		}
-		for _, h := range handlers {
-			if !h.Matches(msg, rtm) {
+	handlers := map[string]event.EventHandler{}
+	register := func(h event.EventHandler) { handlers[h.Subcommand()] = h }
+	register(event.PingHandler{})
+	register(event.NewHelpHandler(cfg.SlackDailyCap, cfg.TestMode, cfg.SlackEmojiMap))
+	register(event.NewPointsHandler(cfg.SlackDailyCap, cfg.TestMode, db))
+	register(event.NewLeaderHandler(cfg.MaxLeaderEntries, db))
+	register(event.NewGiveHandler(cfg.SlackEmojiMap, cfg.SlackDailyCap, cfg.TestMode, db))
+
+	googleConfigured := cfg.GoogleClientID != "" && cfg.GoogleClientSecret != "" && cfg.SessionSecret != ""
+	switch {
+	case cfg.WebAuthDisabled:
+		log.Println("WEB UI AUTH DISABLED (HEY_WEB_AUTH_DISABLED=true): the web UI is reachable by anyone, with no sign-in. For local testing only.")
+		fallthrough
+	case googleConfigured:
+		webServer := web.New(web.Config{
+			BaseURL:             cfg.BaseURL,
+			SessionSecret:       cfg.SessionSecret,
+			GoogleClientID:      cfg.GoogleClientID,
+			GoogleClientSecret:  cfg.GoogleClientSecret,
+			GoogleAllowedDomain: cfg.GoogleAllowedDomain,
+			MaxLeaderEntries:    cfg.MaxLeaderEntries,
+			AuthDisabled:        cfg.WebAuthDisabled,
+		}, db, api)
+		go func() {
+			if err := webServer.Run(ctx, cfg.HTTPPort); err != nil {
+				log.Printf("web server error: %v", err)
+			}
+		}()
+	default:
+		log.Println("web UI disabled: set HEY_GOOGLE_CLIENT_ID, HEY_GOOGLE_CLIENT_SECRET, and HEY_SESSION_SECRET to enable it (or HEY_WEB_AUTH_DISABLED=true for local testing without Google OAuth)")
+	}
+
+	go handleEvents(ctx, client, handlers)
+
+	if err := client.Run(); err != nil {
+		log.Fatalf("socket mode client error: %v", err)
+	}
+}
+
+func handleEvents(ctx context.Context, client *socketmode.Client, handlers map[string]event.EventHandler) {
+	for evt := range client.Events {
+		switch evt.Type {
+		case socketmode.EventTypeConnecting:
+			log.Println("connecting to Slack...")
+		case socketmode.EventTypeConnectionError:
+			log.Println("connection error, retrying...")
+		case socketmode.EventTypeConnected:
+			log.Println("connected to Slack")
+		case socketmode.EventTypeSlashCommand:
+			cmd, ok := evt.Data.(slack.SlashCommand)
+			if !ok {
 				continue
 			}
-			if handled := h.Execute(msg, rtm); handled {
-				break
+			if evt.Request != nil {
+				client.Ack(*evt.Request)
 			}
+			go respond(ctx, client, handlers, cmd)
 		}
 	}
+}
+
+func respond(ctx context.Context, client *socketmode.Client, handlers map[string]event.EventHandler, cmd slack.SlashCommand) {
+	subcommand, args := splitCommand(cmd.Text)
+
+	h, ok := handlers[subcommand]
+	if !ok {
+		h, args = handlers["help"], ""
+	}
+
+	if err := h.Execute(ctx, &client.Client, cmd, args); err != nil {
+		log.Printf("error executing /heybitovi %s: %v", subcommand, err)
+	}
+}
+
+// splitCommand splits "subcommand rest of args..." into its subcommand and the
+// remaining argument text. Defaults to "help" when no subcommand is given.
+func splitCommand(text string) (subcommand string, args string) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "help", ""
+	}
+	parts := strings.SplitN(text, " ", 2)
+	subcommand = strings.ToLower(parts[0])
+	if len(parts) > 1 {
+		args = strings.TrimSpace(parts[1])
+	}
+	return subcommand, args
 }

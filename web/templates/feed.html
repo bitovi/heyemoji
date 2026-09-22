@@ -1,0 +1,34 @@
+{{define "feed.html"}}
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recognition Feed - HeyBitovi</title>
+{{template "fonts"}}
+{{template "styles"}}
+</head>
+<body>
+{{template "nav" .}}
+<main>
+<h1>Recognition Feed</h1>
+<div class="card">
+{{if not .Rows}}
+  <p class="empty">Nobody has given any emoji points yet.</p>
+{{else}}
+{{range .Rows}}
+<div class="feed-item">
+  <div class="avatar">{{.FromInitial}}</div>
+  <div class="feed-text">
+    <div><strong>{{.FromName}}</strong> gave <strong>{{.ToName}}</strong> recognition <span class="points-pill">{{.EmojiGlyph}} {{.Points}} pt{{if ne .Points 1}}s{{end}}</span>{{if .Reason}} &mdash; {{.Reason}}{{end}}</div>
+    <div class="feed-meta">{{.CreatedAt.Format "Jan 2, 2006 3:04 PM MST"}}</div>
+  </div>
+</div>
+{{end}}
+{{end}}
+</div>
+</main>
+{{template "footer" .}}
+</body>
+</html>
+{{end}}

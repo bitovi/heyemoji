@@ -2,7 +2,8 @@ package event
 
 import (
 	"bytes"
-	"strings"
+	"context"
+	"strconv"
 	"text/template"
 
 	"github.com/slack-go/slack"
@@ -10,59 +11,47 @@ import (
 
 type HelpHandler struct {
 	dailyCap int
+	testMode bool
 	emojiMap map[string]int
 }
 
-func NewHelpHandler(dailyCap int, emojiMap map[string]int) HelpHandler {
-	return HelpHandler{dailyCap: dailyCap, emojiMap: emojiMap}
+func NewHelpHandler(dailyCap int, testMode bool, emojiMap map[string]int) HelpHandler {
+	return HelpHandler{dailyCap: dailyCap, testMode: testMode, emojiMap: emojiMap}
 }
 
-func (h HelpHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
-	msg, ok := e.Data.(*slack.MessageEvent)
-	if !ok {
-		return false
-	}
-	if !IsBotMentioned(msg, rtm) && !IsDirectMessage(msg) {
-		return false
-	}
-	if strings.Contains(strings.ToLower(msg.Text), "help") {
-		return true
-	}
-	return false
-}
+func (h HelpHandler) Subcommand() string { return "help" }
 
-func (h HelpHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
+func (h HelpHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
 	tmp := `>*Directions*
->Add a recognition emoji after someone's username like this: *@username Great job!* :{{index .Emoji 0}}:. Everyone has {{.DailyCap}} emoji points to give out per day and can only give them in the channels I've been invited to.
+>Give someone recognition with */heybitovi give @username :{{index .Emoji 0}}: because they crushed it*. Everyone has {{.DailyCap}} emoji points to give out per day.
 >*Recognition Emoji*
 >{{ range $key, $value := .EmojiMap }}:{{$key}}: *({{$value}} pts)*  {{end}}
->*Channel Commands*
->/invite <@{{.Botname}}>: to invite me to channels
-><@{{.Botname}}> leaderboard <day|week|month>: to see the top 10 people on your leaderboard
-><@{{.Botname}}> points: see how many emoji points you have left to give 
-><@{{.Botname}}> help: get help with how to send recognition emoji 
->*Direct Message Commands*
->leaderboard <day|week|month>: to see the top 10 people on your leaderboard
->points: see how many emoji points you have left to give 
->help: get help with how to send recognition emoji`
+>*Commands*
+>/heybitovi give @username :emoji: reason: give someone recognition
+>/heybitovi leaderboard <day|week|month|quarter|year|all>: see the top point earners for a period
+>/heybitovi points: see how many emoji points you have left to give
+>/heybitovi help: show this message`
 
 	t := template.Must(template.New("help").Parse(tmp))
 
+	dailyCapText := strconv.Itoa(h.dailyCap)
+	if h.testMode {
+		dailyCapText = "unlimited (test mode)"
+	}
+
 	var helpStr bytes.Buffer
-	t.Execute(&helpStr, struct {
-		Botname  string
+	if err := t.Execute(&helpStr, struct {
 		Emoji    []string
 		EmojiMap map[string]int
-		DailyCap int
+		DailyCap string
 	}{
-		rtm.GetInfo().User.Name,
 		Keys(h.emojiMap),
 		h.emojiMap,
-		h.dailyCap,
-	})
+		dailyCapText,
+	}); err != nil {
+		return err
+	}
 
-	msg, _ := e.Data.(*slack.MessageEvent)
-	rtm.SendMessage(rtm.NewOutgoingMessage(helpStr.String(), msg.Channel))
-
-	return true
+	_, err := client.PostEphemeralContext(ctx, cmd.ChannelID, cmd.UserID, slack.MsgOptionText(helpStr.String(), false))
+	return err
 }
