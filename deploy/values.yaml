@@ -17,14 +17,14 @@
 # unlimited give cap or a web UI open to anyone with no sign-in.
 name: heyemoji
 repo: bitovi/heyemoji
-
 workloads:
   main:
     kind: server
     port: 8080
     health: /healthz
     domain: heybitovi.bitovi-tools.com
-    image: {}
+    image:
+      tag: v0.1.0
     env:
       HEY_BOT_NAME: HeyBitovi
       HEY_BASE_URL: https://heybitovi.bitovi-tools.com
@@ -38,12 +38,10 @@ workloads:
     secrets: op://bitovi-platform/heyemoji-secrets
     uses:
       - db
-
 dependencies:
   db:
     type: postgres
     storage: 1Gi
     backup: true
-
 infra:
   hostedZone: bitovi-tools-com
