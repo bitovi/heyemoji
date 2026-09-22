@@ -1,0 +1,113 @@
+{{define "details.html"}}
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fun Details - HeyBitovi</title>
+{{template "fonts"}}
+{{template "styles"}}
+</head>
+<body>
+{{template "nav" .}}
+<main>
+<h1>Fun Details</h1>
+<div class="periods">
+  <a href="/app/details?period=month"{{if eq .Period "month"}} class="active"{{end}}>month</a>
+  <a href="/app/details?period=year"{{if eq .Period "year"}} class="active"{{end}}>year</a>
+  {{if .Options}}
+  <select class="when-picker" onchange="location.href='/app/details?period={{.Period}}&when='+this.value">
+    {{range .Options}}<option value="{{.Value}}"{{if eq .Value $.SelectedWhen}} selected{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  {{end}}
+</div>
+
+<div class="kpi-row">
+  <div class="stat-tile">
+    <div class="label">Recognitions {{.PeriodLabel}}</div>
+    <div class="value">{{.TotalRecognitions}}</div>
+  </div>
+  <div class="stat-tile">
+    <div class="label">Points given {{.PeriodLabel}}</div>
+    <div class="value">{{.TotalPointsInPeriod}}</div>
+  </div>
+  {{if .BestDayLabel}}
+  <div class="stat-tile">
+    <div class="label">Best single day</div>
+    <div class="value">{{.BestDayTotal}}</div>
+    <div class="sub">{{.BestDayLabel}}</div>
+  </div>
+  {{end}}
+  {{if .TopEmoji}}
+  <div class="stat-tile">
+    <div class="label">Favorite emoji</div>
+    <div class="value">{{(index .TopEmoji 0).EmojiGlyph}}</div>
+    <div class="sub">given {{(index .TopEmoji 0).Count}} times</div>
+  </div>
+  {{end}}
+</div>
+
+{{if .Awards}}
+<div class="section-title">Fun Awards</div>
+<div class="awards-row">
+  {{range .Awards}}
+  <div class="award-card">
+    <div class="award-title">{{.Title}}</div>
+    <div class="award-winner">{{.Winner}}</div>
+    <div class="award-detail">{{.Detail}}</div>
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+<div class="section-title">{{.DailyChartTitle}}</div>
+<div class="card">
+  <div class="col-chart">
+    {{range .DayBars}}
+    <div class="col{{if .Emphasis}} emphasis{{end}}">
+      {{if .Emphasis}}<div class="bar-value">{{.Total}}</div>{{end}}
+      <div class="bar" style="height: {{.HeightPct}}%" title="{{.Label}}: {{.Total}} pt{{if ne .Total 1}}s{{end}}"></div>
+    </div>
+    {{end}}
+  </div>
+</div>
+<div class="section-hint">Hover a bar for its date and total. The highlighted bar is the busiest day in this window.</div>
+
+<div class="section-title">Top 3 point earners {{.PeriodLabel}}</div>
+<div class="card">
+{{if not .LeaderBars}}
+  <p class="empty">Nobody has earned any points yet {{.PeriodLabel}}.</p>
+{{else}}
+  <div class="leader-bars">
+  {{range .LeaderBars}}
+    <div class="leader-row">
+      <span class="rank-badge{{if eq .Rank 1}} first{{end}}">{{.Rank}}</span>
+      <div class="leader-meta">
+        <span class="leader-name">{{.Name}}</span>
+        <span class="leader-total">{{.Total}}</span>
+      </div>
+      <div class="track"><div class="fill" style="width: {{.WidthPct}}%; background: var(--{{.ColorClass}})"></div></div>
+    </div>
+  {{end}}
+  </div>
+{{end}}
+</div>
+
+<div class="section-title">Busiest day of the week ({{.PeriodLabel}})</div>
+<div class="card">
+  <div class="col-chart weekday-chart">
+    {{range .WeekdayBars}}
+    <div class="col{{if .Emphasis}} emphasis{{end}}">
+      <div class="bar-value">{{.Total}}</div>
+      <div class="bar" style="height: {{.HeightPct}}%" title="{{.Label}}: {{.Total}} pt{{if ne .Total 1}}s{{end}}"></div>
+      <div class="col-label">{{.Label}}</div>
+    </div>
+    {{end}}
+  </div>
+</div>
+
+</main>
+{{template "footer" .}}
+</body>
+</html>
+{{end}}

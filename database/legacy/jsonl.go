@@ -1,4 +1,7 @@
-package database
+// Package legacy holds the original JSONL flat-file storage driver. It is no longer
+// wired into the running application — kept only as the input reader for the future
+// one-time backfill tool that will migrate legacy data into Postgres.
+package legacy
 
 import (
 	"bufio"
@@ -23,7 +26,7 @@ type KarmaEvent struct {
 	Date   time.Time `json:"date"`
 }
 
-func NewJSONLineDriver(path string, maxDays int) Driver {
+func NewJSONLineDriver(path string, maxDays int) *JSONLineDriver {
 	return &JSONLineDriver{
 		path:    path,
 		maxDays: maxDays,

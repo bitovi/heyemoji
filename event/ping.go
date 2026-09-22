@@ -1,34 +1,16 @@
 package event
 
 import (
-	"fmt"
-	"strings"
+	"context"
 
 	"github.com/slack-go/slack"
 )
 
 type PingHandler struct{}
 
-func (p PingHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
-	msg, ok := e.Data.(*slack.MessageEvent)
-	if !ok {
-		return false
-	}
-	if !IsBotMentioned(msg, rtm) && !IsDirectMessage(msg) {
-		return false
-	}
-	if strings.Contains(strings.ToLower(msg.Text), "ping") {
-		return true
-	}
-	return false
-}
+func (PingHandler) Subcommand() string { return "ping" }
 
-func (p PingHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
-	msg, _ := e.Data.(*slack.MessageEvent)
-
-	fmt.Println("EXECUTE PING START")
-	fmt.Printf("Channel: %s\n", msg.Channel)
-	rtm.SendMessage(rtm.NewOutgoingMessage("pong", msg.Channel))
-
-	return true
+func (PingHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
+	_, err := client.PostEphemeralContext(ctx, cmd.ChannelID, cmd.UserID, slack.MsgOptionText("pong", false))
+	return err
 }

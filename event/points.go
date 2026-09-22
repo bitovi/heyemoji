@@ -1,45 +1,39 @@
 package event
 
 import (
+	"context"
 	"fmt"
-	"strings"
 
-	"github.com/mmcdole/heyemoji/database"
+	"github.com/bitovi/heyemoji/database"
 	"github.com/slack-go/slack"
 )
 
 type PointsHandler struct {
 	db       database.Driver
 	dailyCap int
+	testMode bool
 }
 
-func NewPointsHandler(dailyCap int, db database.Driver) PointsHandler {
-	return PointsHandler{db: db, dailyCap: dailyCap}
+func NewPointsHandler(dailyCap int, testMode bool, db database.Driver) PointsHandler {
+	return PointsHandler{db: db, dailyCap: dailyCap, testMode: testMode}
 }
 
-func (h PointsHandler) Matches(e slack.RTMEvent, rtm *slack.RTM) bool {
-	msg, ok := e.Data.(*slack.MessageEvent)
-	if !ok {
-		return false
+func (h PointsHandler) Subcommand() string { return "points" }
+
+func (h PointsHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
+	var msg string
+	if h.testMode {
+		msg = "You have unlimited emoji points to give today (test mode)."
+	} else {
+		given, err := h.db.QueryKarmaGiven(ctx, cmd.UserID, LastPointReset())
+		if err != nil {
+			return err
+		}
+		balance := h.dailyCap - given
+		msg = fmt.Sprintf("You have %d emoji points left to give today. Your points will reset in %s.",
+			balance, FmtDuration(TimeTillPointReset()))
 	}
-	if !IsBotMentioned(msg, rtm) && !IsDirectMessage(msg) {
-		return false
-	}
-	if strings.Contains(strings.ToLower(msg.Text), "points") {
-		return true
-	}
-	return false
-}
 
-func (h PointsHandler) Execute(e slack.RTMEvent, rtm *slack.RTM) bool {
-	ev, _ := e.Data.(*slack.MessageEvent)
-
-	given, _ := h.db.QueryKarmaGiven(ev.User, LastPointReset())
-	balance := h.dailyCap - given
-
-	timeTillReset := FmtDuration(TimeTillPointReset())
-	msg := fmt.Sprintf("You have %d emoji points left to give today. Your points will reset in %s.", balance, timeTillReset)
-	rtm.SendMessage(rtm.NewOutgoingMessage(msg, ev.Channel))
-
-	return true
+	_, err := client.PostEphemeralContext(ctx, cmd.ChannelID, cmd.UserID, slack.MsgOptionText(msg, false))
+	return err
 }
