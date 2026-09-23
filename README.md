@@ -26,6 +26,8 @@ The `heyemoji` bot (Slack-facing name: **HeyBitovi**) is a self-hosted slack rew
 
 `/heybitovi give @petergibbons :star: :trophy: :clap: :clap: Found my red stapler!`
 
+`give` can be run from any channel, private channel, or a DM with the bot - it doesn't matter where you type it. The public recognition message always posts to one fixed announcement channel (`HEY_ANNOUNCE_CHANNEL_ID`), not wherever the command was run from; you also always get a DM confirming the points were recorded. Multiple gives to the same person on the same day thread onto that person's first announcement of the day rather than posting separately.
+
 ### Bot Commands
 
 | Name                                                | Description                                                |
@@ -138,6 +140,7 @@ Restart (`docker-compose up --build`), then visit `http://localhost:8080` — it
 | HEY_SLACK_APP_TOKEN | | Yes | The app-level token used for Socket Mode |
 | HEY_SLACK_EMOJI | star:1 | No | Comma delimited set of emoji "name:value" pairs |
 | HEY_SLACK_DAILY_CAP | 5 | No | The max number of emoji points that can be given out in a day |
+| HEY_ANNOUNCE_CHANNEL_ID | | No | Slack channel ID (e.g. `C0123456789`, not a channel name) every `/heybitovi give` announcement posts to and threads under, regardless of which channel or DM the command was run from. The bot must be a member of it. If unset, gives are still recorded but no public announcement is posted - the giver still gets a DM confirmation. |
 | HEY_MAX_LEADER_ENTRIES  | 10 | No |  Max number of entries contained in the leaderboards |
 | HEY_TEST_MODE | false | No | When `true`, disables the daily give cap entirely (everyone has unlimited points). Every place that would normally show the cap as a number instead says "unlimited (test mode)". Not for production use. |
 | HEY_HTTP_PORT | 8080 | No | Port the web UI listens on |

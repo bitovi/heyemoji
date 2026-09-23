@@ -6,19 +6,19 @@ import (
 )
 
 func TestGiveHandler_EffectiveDailyCap(t *testing.T) {
-	normal := NewGiveHandler(map[string]int{"star": 1}, 5, false, nil)
+	normal := NewGiveHandler(map[string]int{"star": 1}, 5, false, "", nil)
 	if got := normal.effectiveDailyCap(); got != 5 {
 		t.Errorf("effectiveDailyCap() (test mode off) = %d, want 5", got)
 	}
 
-	testMode := NewGiveHandler(map[string]int{"star": 1}, 5, true, nil)
+	testMode := NewGiveHandler(map[string]int{"star": 1}, 5, true, "", nil)
 	if got := testMode.effectiveDailyCap(); got != UnlimitedDailyCap {
 		t.Errorf("effectiveDailyCap() (test mode on) = %d, want %d", got, UnlimitedDailyCap)
 	}
 }
 
 func TestGiveHandler_ParseUsers(t *testing.T) {
-	h := NewGiveHandler(map[string]int{"star": 1}, 5, false, nil)
+	h := NewGiveHandler(map[string]int{"star": 1}, 5, false, "", nil)
 
 	got := h.parseUsers("<@U123|bob> and <@U456> did great work :star:")
 	want := []string{"U123", "U456"}
@@ -28,7 +28,7 @@ func TestGiveHandler_ParseUsers(t *testing.T) {
 }
 
 func TestGiveHandler_ParseEmojis(t *testing.T) {
-	h := NewGiveHandler(map[string]int{"star": 1, "clap": 2}, 5, false, nil)
+	h := NewGiveHandler(map[string]int{"star": 1, "clap": 2}, 5, false, "", nil)
 
 	got := h.parseEmojis("<@U123> :star: :clap: nice work")
 	want := []string{"star", "clap"}
@@ -38,7 +38,7 @@ func TestGiveHandler_ParseEmojis(t *testing.T) {
 }
 
 func TestGiveHandler_ParseReason(t *testing.T) {
-	h := NewGiveHandler(map[string]int{"star": 1}, 5, false, nil)
+	h := NewGiveHandler(map[string]int{"star": 1}, 5, false, "", nil)
 
 	cases := []struct {
 		text string

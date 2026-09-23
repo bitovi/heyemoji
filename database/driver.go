@@ -12,17 +12,25 @@ import (
 var ErrDailyCapExceeded = errors.New("daily karma cap exceeded")
 
 // KarmaEvent is one recognition grant: a single (from, to, emoji) triple and its
-// point value, reason, and originating channel. Giving multiple emoji and/or to
-// multiple recipients in one /heybitovi give produces multiple KarmaEvents.
+// point value and reason. Giving multiple emoji and/or to multiple recipients in one
+// /heybitovi give produces multiple KarmaEvents.
 type KarmaEvent struct {
-	ID        string
-	LegacyID  string // set only for events backfilled from the legacy JSONL store; empty otherwise
-	From      string
-	To        string
-	Emoji     string
-	Points    int
-	Reason    string
-	ChannelID string
+	ID       string
+	LegacyID string // set only for events backfilled from the legacy JSONL store; empty otherwise
+	From     string
+	To       string
+	Emoji    string
+	Points   int
+	Reason   string
+	// SourceChannelID is where /heybitovi give was actually typed - a public channel,
+	// private channel, or DM. Purely informational (the web UI's feed shows it); it
+	// has no bearing on where the announcement posts.
+	SourceChannelID string
+	// ThreadChannelID is where this event's announcement is (or would be) posted and
+	// threaded - the configured announcement channel, the same value for every event
+	// once HEY_ANNOUNCE_CHANNEL_ID is set, regardless of SourceChannelID. Empty when
+	// no announcement channel is configured, meaning no announcement was attempted.
+	ThreadChannelID string
 	// ThreadTS is the Slack message timestamp of the announcement this event was (or
 	// will be) posted under - the root of the recipient's recognition thread for the
 	// grouping window in use, so later gives to the same person can thread onto it
@@ -45,9 +53,11 @@ type Driver interface {
 	// ErrDailyCapExceeded is returned.
 	GiveKarma(ctx context.Context, events []KarmaEvent, since time.Time, dailyCap int) (inserted []KarmaEvent, remaining int, err error)
 
-	// LatestThreadTS returns the thread_ts of the most recent event for (channelID,
-	// toUser) created after since, if any (ok is false when there isn't one).
-	LatestThreadTS(ctx context.Context, channelID, toUser string, since time.Time) (ts string, ok bool, err error)
+	// LatestThreadTS returns the thread_ts of the most recent event threaded under
+	// (threadChannelID, toUser) created after since, if any (ok is false when there
+	// isn't one). threadChannelID is the announcement channel, not where the give was
+	// typed - see KarmaEvent.ThreadChannelID.
+	LatestThreadTS(ctx context.Context, threadChannelID, toUser string, since time.Time) (ts string, ok bool, err error)
 
 	// SetThreadTS backfills thread_ts on the given event IDs, once a brand-new
 	// announcement message's timestamp is known (it can't be known before the

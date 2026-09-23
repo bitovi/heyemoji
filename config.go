@@ -16,6 +16,12 @@ type Config struct {
 	SlackEmojiMap    map[string]int
 	SlackDailyCap    int
 	MaxLeaderEntries int
+	// AnnounceChannelID is the Slack channel ID (e.g. "C0123456789", not a channel
+	// name) every /heybitovi give announcement posts to and threads under, regardless
+	// of which channel or DM the command was run from. The bot must be a member of
+	// it. If empty, gives are still recorded but no public announcement is posted -
+	// the giver's DM confirmation says so.
+	AnnounceChannelID string
 	// TestMode, when true, disables the daily give cap entirely (everyone has
 	// unlimited points) so testing doesn't get blocked by running out for the day.
 	// Not meant for production use - every place the cap is shown to a user says
@@ -56,6 +62,7 @@ func readConfig() *Config {
 	viper.SetDefault("slack_emoji", "star:1")
 	viper.SetDefault("slack_daily_cap", 5)
 	viper.SetDefault("max_leader_entries", 10)
+	viper.SetDefault("announce_channel_id", "")
 	viper.SetDefault("test_mode", false)
 	viper.SetDefault("http_port", "8080")
 	viper.SetDefault("base_url", "http://localhost:8080")
@@ -73,6 +80,7 @@ func readConfig() *Config {
 		SlackEmoji:          viper.GetString("slack_emoji"),
 		SlackDailyCap:       viper.GetInt("slack_daily_cap"),
 		MaxLeaderEntries:    viper.GetInt("max_leader_entries"),
+		AnnounceChannelID:   viper.GetString("announce_channel_id"),
 		TestMode:            viper.GetBool("test_mode"),
 		HTTPPort:            viper.GetString("http_port"),
 		BaseURL:             strings.TrimSuffix(viper.GetString("base_url"), "/"),

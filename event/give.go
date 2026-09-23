@@ -33,15 +33,19 @@ var emojiTokenRegex = regexp.MustCompile(`^:[^:\s]+:$`)
 // name resolves without scanning the entire rest of the message as one candidate.
 const maxPlainMentionWords = 4
 
-func NewGiveHandler(emoji map[string]int, dailyCap int, testMode bool, db database.Driver) *GiveHandler {
-	return &GiveHandler{emoji: emoji, dailyCap: dailyCap, testMode: testMode, db: db}
+func NewGiveHandler(emoji map[string]int, dailyCap int, testMode bool, announceChannelID string, db database.Driver) *GiveHandler {
+	return &GiveHandler{emoji: emoji, dailyCap: dailyCap, testMode: testMode, announceChannelID: announceChannelID, db: db}
 }
 
 type GiveHandler struct {
 	emoji    map[string]int
 	dailyCap int
 	testMode bool
-	db       database.Driver
+	// announceChannelID is where every give's announcement posts and threads,
+	// regardless of where the command was run from. Empty disables public
+	// announcements entirely (gives are still recorded).
+	announceChannelID string
+	db                database.Driver
 
 	mu        sync.Mutex
 	userCache map[string]string // lowercased username/display name -> user ID, lazily loaded
@@ -60,15 +64,15 @@ func (h *GiveHandler) effectiveDailyCap() int {
 // Execute parses "@user :emoji: optional reason text" out of args, gives the
 // recognized users the corresponding emoji points (deducted once from the giver's
 // daily balance per emoji per recipient), and announces the recognition publicly in
-// the channel the command was run from - unless that "channel" is a DM with the bot,
-// which has nowhere public to announce into, so the announcement is skipped entirely
-// there. The giver always gets a DM confirming the points were recorded, regardless of
+// h.announceChannelID - always that one configured channel, regardless of which
+// channel or DM the command was actually run from (that origin is still recorded, as
+// KarmaEvent.SourceChannelID, purely for the web UI's feed). If no announce channel is
+// configured, the announcement is skipped entirely; points are still recorded either
+// way. The giver always gets a DM confirming the points were recorded, regardless of
 // whether (or why) the public announcement didn't post - DMs don't require channel
 // membership the way chat.postMessage/postEphemeral into cmd.ChannelID do, so this is
 // the one confirmation path that works everywhere.
 func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
-	isDM := IsDirectMessage(cmd.ChannelID)
-
 	emojis := h.parseEmojis(args)
 	if len(emojis) == 0 {
 		log.Printf("give: no known emoji found in args %q", args)
@@ -107,13 +111,16 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	// Look up each recipient's already-open recognition thread for today, if any,
 	// before inserting so we know up front which rows can be threaded immediately
 	// versus which belong to a brand-new announcement (whose ts we won't know until
-	// after we post it - see the backfill loop below).
+	// after we post it - see the backfill loop below). Skipped entirely when there's
+	// no announce channel configured - nothing to thread under.
 	existingThreadTS := make(map[string]string, len(recipients))
-	for _, u := range recipients {
-		if ts, ok, err := h.db.LatestThreadTS(ctx, cmd.ChannelID, u, since); err != nil {
-			return err
-		} else if ok {
-			existingThreadTS[u] = ts
+	if h.announceChannelID != "" {
+		for _, u := range recipients {
+			if ts, ok, err := h.db.LatestThreadTS(ctx, h.announceChannelID, u, since); err != nil {
+				return err
+			} else if ok {
+				existingThreadTS[u] = ts
+			}
 		}
 	}
 
@@ -124,13 +131,14 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 		batchTotal += points * len(recipients)
 		for _, u := range recipients {
 			events = append(events, database.KarmaEvent{
-				From:      cmd.UserID,
-				To:        u,
-				Emoji:     e,
-				Points:    points,
-				Reason:    reason,
-				ChannelID: cmd.ChannelID,
-				ThreadTS:  existingThreadTS[u],
+				From:            cmd.UserID,
+				To:              u,
+				Emoji:           e,
+				Points:          points,
+				Reason:          reason,
+				SourceChannelID: cmd.ChannelID,
+				ThreadChannelID: h.announceChannelID,
+				ThreadTS:        existingThreadTS[u],
 			})
 		}
 	}
@@ -161,7 +169,7 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	}
 
 	var failedAnnouncements []string // recipient user IDs whose public announcement didn't post
-	if !isDM {
+	if h.announceChannelID != "" {
 		for _, u := range recipients {
 			if err := h.announce(ctx, client, cmd, u, byRecipient[u], existingThreadTS[u]); err != nil {
 				log.Printf("give: failed to post announcement for recipient %s: %v", u, err)
@@ -181,13 +189,13 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	if gaveSelfKarma {
 		confirmation += " (Note: you can't give points to yourself, so that part was skipped.)"
 	}
-	if isDM {
-		confirmation += "\n\n(No public recognition message was posted, since this was a DM - only you can see this. Run `/heybitovi give` from a channel instead if you want the team to see it.)"
+	if h.announceChannelID == "" {
+		confirmation += "\n\n(No public recognition message was posted - no announcement channel is configured. The points were still given.)"
 	} else if len(failedAnnouncements) > 0 {
 		failedMentions := Map(failedAnnouncements, func(u string) string { return fmt.Sprintf("<@%s>", u) })
 		confirmation += fmt.Sprintf(
-			"\n\n:warning: I couldn't post the public recognition message in <#%s> for %s - I'm probably not a member of that channel (common for private channels, which I can never join automatically). The points were still given; `/invite @HeyBitovi` to that channel to get public announcements there too.",
-			cmd.ChannelID, strings.Join(failedMentions, " "))
+			"\n\n:warning: I couldn't post the public recognition message for %s - I may not be a member of the announcement channel anymore. The points were still given; someone should check that I'm still invited to <#%s>.",
+			strings.Join(failedMentions, " "), h.announceChannelID)
 	}
 	return h.dmUser(ctx, client, cmd.UserID, confirmation)
 }
@@ -224,7 +232,7 @@ func (h *GiveHandler) announce(ctx context.Context, client *slack.Client, cmd sl
 		opts = append(opts, slack.MsgOptionTS(existingTS))
 	}
 
-	_, ts, err := client.PostMessageContext(ctx, cmd.ChannelID, opts...)
+	_, ts, err := client.PostMessageContext(ctx, h.announceChannelID, opts...)
 	if err != nil {
 		return err
 	}
