@@ -34,11 +34,12 @@ type Config struct {
 
 func New(cfg Config, db database.Driver, slackClient *slack.Client) *Server {
 	return &Server{
-		cfg:       cfg,
-		db:        db,
-		slack:     slackClient,
-		templates: template.Must(template.ParseFS(templatesFS, "templates/*.html")),
-		userCache: map[string]string{},
+		cfg:          cfg,
+		db:           db,
+		slack:        slackClient,
+		templates:    template.Must(template.ParseFS(templatesFS, "templates/*.html")),
+		userCache:    map[string]string{},
+		channelCache: map[string]string{},
 	}
 }
 
@@ -48,8 +49,10 @@ type Server struct {
 	slack     *slack.Client
 	templates *template.Template
 
-	mu        sync.Mutex
-	userCache map[string]string // Slack user ID -> display name, lazily cached
+	mu           sync.Mutex
+	userCache    map[string]string // Slack user ID -> display name, lazily cached
+	channelCache map[string]string // Slack channel ID -> channel name, lazily cached
+	teamURL      string            // e.g. "https://bitovi.slack.com/" - resolved once via auth.test, empty until then
 }
 
 func (s *Server) Handler() http.Handler {
@@ -121,4 +124,54 @@ func (s *Server) resolveDisplayName(ctx context.Context, userID string) string {
 	s.userCache[userID] = name
 	s.mu.Unlock()
 	return name
+}
+
+// resolveChannel maps a Slack channel ID to a display name (e.g. "#general") and a
+// link to it in Slack, caching names for the life of the process. Name resolution
+// needs the bot to have the channels:read (public) or groups:read (private, and only
+// for channels it's a member of) scope - without it, or for a private channel it
+// hasn't been invited to, this falls back to the raw channel ID as the display text.
+// The link itself needs no scope and always works: it's just a URL built from the
+// workspace's domain, resolved by the viewer's own Slack session rather than the
+// bot's access.
+func (s *Server) resolveChannel(ctx context.Context, channelID string) (name, url string) {
+	url = s.channelURL(ctx, channelID)
+
+	s.mu.Lock()
+	if cached, ok := s.channelCache[channelID]; ok {
+		s.mu.Unlock()
+		return cached, url
+	}
+	s.mu.Unlock()
+
+	name = channelID
+	if info, err := s.slack.GetConversationInfoContext(ctx, &slack.GetConversationInfoInput{ChannelID: channelID}); err == nil && info.Name != "" {
+		name = "#" + info.Name
+	}
+
+	s.mu.Lock()
+	s.channelCache[channelID] = name
+	s.mu.Unlock()
+	return name, url
+}
+
+// channelURL resolves the workspace's Slack URL once (via auth.test, which needs no
+// special scope) and builds a link to channelID from it.
+func (s *Server) channelURL(ctx context.Context, channelID string) string {
+	s.mu.Lock()
+	team := s.teamURL
+	s.mu.Unlock()
+
+	if team == "" {
+		resp, err := s.slack.AuthTestContext(ctx)
+		if err != nil {
+			log.Printf("web: auth.test failed while resolving channel link: %v", err)
+			return ""
+		}
+		team = resp.URL
+		s.mu.Lock()
+		s.teamURL = team
+		s.mu.Unlock()
+	}
+	return team + "archives/" + channelID
 }

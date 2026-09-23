@@ -131,6 +131,8 @@ type feedRow struct {
 	Points      int
 	Reason      string
 	CreatedAt   time.Time
+	ChannelName string
+	ChannelURL  string
 }
 
 // initialOf returns the first rune of name, uppercased, for an avatar badge. Falls
@@ -161,6 +163,7 @@ func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
 	rows := make([]feedRow, 0, len(events))
 	for _, ev := range events {
 		fromName := s.resolveDisplayName(r.Context(), ev.From)
+		channelName, channelURL := s.resolveChannel(r.Context(), ev.ChannelID)
 		rows = append(rows, feedRow{
 			FromName:    fromName,
 			FromInitial: initialOf(fromName),
@@ -169,6 +172,8 @@ func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
 			Points:      ev.Points,
 			Reason:      ev.Reason,
 			CreatedAt:   ev.CreatedAt.In(event.BusinessLocation()),
+			ChannelName: channelName,
+			ChannelURL:  channelURL,
 		})
 	}
 
