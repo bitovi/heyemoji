@@ -97,7 +97,16 @@ func respond(ctx context.Context, client *socketmode.Client, handlers map[string
 
 	h, ok := handlers[subcommand]
 	if !ok {
-		h, args = handlers["help"], ""
+		// The first word isn't a recognized subcommand - most likely someone typed
+		// "/heybitovi @user :emoji: reason" and just skipped "give" (it's the default
+		// action, so this saves a word). Assume give and hand it the whole original
+		// text, not the post-split args, since what splitCommand treated as
+		// "subcommand" (e.g. "@user") is actually part of give's own input.
+		// (An empty command never reaches here - splitCommand already returns "help"
+		// for that, which is a registered handler.)
+		subcommand = "give"
+		args = strings.TrimSpace(cmd.Text)
+		h = handlers["give"]
 	}
 
 	if err := h.Execute(ctx, &client.Client, cmd, args); err != nil {
