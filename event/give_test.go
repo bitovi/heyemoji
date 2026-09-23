@@ -50,62 +50,9 @@ func TestGiveHandler_ParseReason(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := h.parseReason(c.text, nil); got != c.want {
+		if got := h.parseReason(c.text); got != c.want {
 			t.Errorf("parseReason(%q) = %q, want %q", c.text, got, c.want)
 		}
-	}
-}
-
-func TestCandidatesForMention_SingleWord(t *testing.T) {
-	// A bare "@name" (not <@...> markup) is a candidate for username lookup; a real
-	// mention's <@U123|bob> internals must not also be picked up as a candidate.
-	occurrences := candidatesForMention("<@U123|bob> @philh :star: because they crushed it")
-	if len(occurrences) != 1 {
-		t.Fatalf("got %d occurrences, want 1: %+v", len(occurrences), occurrences)
-	}
-	if got := occurrences[0][0]; got.name != "philh" || got.token != "@philh" {
-		t.Errorf("first candidate = %+v, want name:philh token:@philh", got)
-	}
-}
-
-func TestCandidatesForMention_MultiWordLongestFirst(t *testing.T) {
-	// A multi-word display name like "David Nicholas" must be offered as a candidate
-	// (not just the first word "David") and tried longest-first.
-	occurrences := candidatesForMention("@David Nicholas :star: third thing")
-	if len(occurrences) != 1 {
-		t.Fatalf("got %d occurrences, want 1: %+v", len(occurrences), occurrences)
-	}
-
-	got := occurrences[0]
-	want := []plainMentionCandidate{
-		{name: "David Nicholas", token: "@David Nicholas"},
-		{name: "David", token: "@David"},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("candidates = %+v, want %+v", got, want)
-	}
-}
-
-func TestCandidatesForMention_TrailingPunctuation(t *testing.T) {
-	// A trailing comma right after the name (mid-sentence, no emoji/mention boundary
-	// following it) must still produce "David Nicholas" as a candidate, with the
-	// comma stripped - even though longer, punctuation-spanning candidates are also
-	// generated and tried first (resolvePlainMentions falls through to shorter ones
-	// at runtime when a longer candidate doesn't match a real user).
-	occurrences := candidatesForMention("Thanks @David Nicholas, for everything")
-	if len(occurrences) != 1 {
-		t.Fatalf("got %d occurrences, want 1: %+v", len(occurrences), occurrences)
-	}
-
-	found := false
-	for _, c := range occurrences[0] {
-		if c.name == "David Nicholas" && c.token == "@David Nicholas" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("candidates = %+v, want one with name:\"David Nicholas\" token:\"@David Nicholas\"", occurrences[0])
 	}
 }
 

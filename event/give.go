@@ -6,7 +6,6 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/bitovi/heyemoji/database"
 	"github.com/slack-go/slack"
@@ -14,24 +13,9 @@ import (
 
 // userRegex matches Slack's mention markup, e.g. <@U12345> or <@U12345|username>. This
 // is what Slack sends when someone picks a user from the @mention autocomplete
-// suggestion in the slash command box.
+// suggestion in the slash command box - the only way give recognizes a recipient (see
+// package doc on Execute for why there's deliberately no plain-text name fallback).
 var userRegex = regexp.MustCompile(`<@([A-Z0-9]+)(?:\|[^>]*)?>`)
-
-// wordTokenRegex splits text on whitespace for plain-@mention scanning.
-var wordTokenRegex = regexp.MustCompile(`\S+`)
-
-// trailingPunctRegex strips punctuation someone might type right after a name, e.g.
-// "@David Nicholas," or "@David Nicholas:", so it isn't treated as part of the name.
-var trailingPunctRegex = regexp.MustCompile(`[,.:;!?]+$`)
-
-// emojiTokenRegex matches a colon-wrapped emoji token like ":star:", used as a
-// boundary that stops a name candidate from growing past it.
-var emojiTokenRegex = regexp.MustCompile(`^:[^:\s]+:$`)
-
-// maxPlainMentionWords bounds how many words after a bare "@" we'll try joining into
-// one name candidate (e.g. "@David Nicholas" -> "David Nicholas"), so a first-plus-last
-// name resolves without scanning the entire rest of the message as one candidate.
-const maxPlainMentionWords = 4
 
 func NewGiveHandler(emoji map[string]int, dailyCap int, testMode bool, announceChannelID string, db database.Driver) *GiveHandler {
 	return &GiveHandler{emoji: emoji, dailyCap: dailyCap, testMode: testMode, announceChannelID: announceChannelID, db: db}
@@ -46,9 +30,6 @@ type GiveHandler struct {
 	// announcements entirely (gives are still recorded).
 	announceChannelID string
 	db                database.Driver
-
-	mu        sync.Mutex
-	userCache map[string]string // lowercased username/display name -> user ID, lazily loaded
 }
 
 func (h *GiveHandler) Subcommand() string { return "give" }
@@ -72,6 +53,20 @@ func (h *GiveHandler) effectiveDailyCap() int {
 // whether (or why) the public announcement didn't post - DMs don't require channel
 // membership the way chat.postMessage/postEphemeral into cmd.ChannelID do, so this is
 // the one confirmation path that works everywhere.
+//
+// A recipient is recognized only via Slack's own <@U...> mention markup - selecting
+// someone from the "@" autocomplete in the slash command box - never a plain-typed
+// name. An earlier version also matched plain text (e.g. "@Kyle") against the
+// workspace's user list by exact, case-insensitive name, but that's inherently
+// ambiguous whenever two people share a name or partial name: it would silently
+// resolve to whichever of them happened to win the lookup, with no indication to the
+// giver that a different person than they meant was just targeted. Slack's own
+// mention markup embeds the exact, unique user ID directly - there's no resolution
+// step to get wrong - so requiring it removes the entire bug class rather than trying
+// to disambiguate within it. The cost is a real one: someone who types a name without
+// selecting it from the autocomplete dropdown gets usageMessage()'s hint instead of a
+// (possibly wrong) guess - worth it for a points-giving command, where mistargeting
+// has a real consequence.
 func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
 	emojis := h.parseEmojis(args)
 	if len(emojis) == 0 {
@@ -80,12 +75,6 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	}
 
 	users := h.parseUsers(args)
-
-	// Fall back to resolving plain "@Some Name" text (not real mention markup)
-	// against the workspace's user list, and remember which literal tokens resolved
-	// so they can be stripped out of the reason text below.
-	plainIDs, resolvedTokens := h.resolvePlainMentions(ctx, client, args)
-	users = append(users, plainIDs...)
 
 	gaveSelfKarma := false
 	recipients := make([]string, 0, len(users))
@@ -105,7 +94,7 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 		return h.replyEphemeral(ctx, client, cmd, h.usageMessage())
 	}
 
-	reason := h.parseReason(args, resolvedTokens)
+	reason := h.parseReason(args)
 	since := LastPointReset() // also the start of "today" - the recognition-thread grouping window
 
 	// Look up each recipient's already-open recognition thread for today, if any,
@@ -267,7 +256,10 @@ func (h *GiveHandler) usageMessage() string {
 		example = e
 		break
 	}
-	return fmt.Sprintf("Give someone recognition like this: `/heybitovi give @username :%s: because they crushed it`", example)
+	return fmt.Sprintf(
+		"Give someone recognition like this: `/heybitovi give @username :%s: because they crushed it`\n"+
+			"Pick them from the @ autocomplete suggestion as you type - just typing their name without selecting it won't work.",
+		example)
 }
 
 func (h *GiveHandler) emojiRegex() *regexp.Regexp {
@@ -295,119 +287,11 @@ func (h *GiveHandler) parseUsers(text string) []string {
 	return users
 }
 
-// plainMentionCandidate is one "try resolving this phrase" option for a single "@..."
-// occurrence in a message - candidatesForMention returns these longest-first so the
-// caller can take the longest one that actually resolves to a real user (so "@David
-// Nicholas" is tried as "David Nicholas" before falling back to just "David").
-type plainMentionCandidate struct {
-	name  string // the phrase to look up, e.g. "David Nicholas"
-	token string // the exact literal substring it came from, e.g. "@David Nicholas" - what to strip from the reason if this candidate is the one that resolves
-}
-
-// candidatesForMention finds every "@..." occurrence in text that isn't part of real
-// <@...> mention markup, and for each one returns its resolution candidates
-// (1..maxPlainMentionWords words after the @, longest first, trailing punctuation like
-// a comma stripped). Pure and independent of any Slack API call, so it's unit-testable
-// on its own; resolvePlainMentions does the actual lookups.
-func candidatesForMention(text string) [][]plainMentionCandidate {
-	withoutMarkup := userRegex.ReplaceAllString(text, "")
-	tokenIdx := wordTokenRegex.FindAllStringIndex(withoutMarkup, -1)
-
-	var occurrences [][]plainMentionCandidate
-	for i := 0; i < len(tokenIdx); i++ {
-		start := tokenIdx[i][0]
-		if withoutMarkup[start] != '@' || tokenIdx[i][1]-start < 2 {
-			continue
-		}
-
-		var candidates []plainMentionCandidate
-		for j := i; j < len(tokenIdx) && j < i+maxPlainMentionWords; j++ {
-			if j > i {
-				word := withoutMarkup[tokenIdx[j][0]:tokenIdx[j][1]]
-				if strings.HasPrefix(word, "@") || emojiTokenRegex.MatchString(word) {
-					break // an emoji token or another mention can't be part of this name
-				}
-			}
-			end := tokenIdx[j][1]
-			raw := withoutMarkup[start+1 : end]
-			if loc := trailingPunctRegex.FindStringIndex(raw); loc != nil {
-				end -= len(raw) - loc[0]
-				raw = raw[:loc[0]]
-			}
-			if raw == "" {
-				continue
-			}
-			candidates = append(candidates, plainMentionCandidate{name: raw, token: withoutMarkup[start:end]})
-		}
-
-		// Longest phrase first, so the caller stops at the first (longest) match.
-		for l, r := 0, len(candidates)-1; l < r; l, r = l+1, r-1 {
-			candidates[l], candidates[r] = candidates[r], candidates[l]
-		}
-		occurrences = append(occurrences, candidates)
-	}
-	return occurrences
-}
-
-// resolvePlainMentions resolves every plain "@Some Name" occurrence in text (not real
-// mention markup) against the workspace's user list, taking the longest word sequence
-// that matches a real user for each occurrence. Returns the resolved user IDs and the
-// literal "@..." substrings that matched, so callers can strip them out of the reason
-// text.
-func (h *GiveHandler) resolvePlainMentions(ctx context.Context, client *slack.Client, text string) (ids []string, tokens []string) {
-	for _, candidates := range candidatesForMention(text) {
-		for _, c := range candidates {
-			if id, ok := h.resolveUsername(ctx, client, c.name); ok {
-				ids = append(ids, id)
-				tokens = append(tokens, c.token)
-				break // longest-first, so the first hit is the best one
-			}
-		}
-	}
-	return ids, tokens
-}
-
-// resolveUsername looks up name (a username, display name, or real name,
-// case-insensitive) against the workspace's user list, lazily loaded and cached for
-// the life of the process. Returns the user's ID and true on a match.
-func (h *GiveHandler) resolveUsername(ctx context.Context, client *slack.Client, name string) (string, bool) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if h.userCache == nil {
-		h.userCache = map[string]string{}
-		users, err := client.GetUsersContext(ctx)
-		if err != nil {
-			log.Printf("give: failed to list workspace users for @mention lookup: %v", err)
-			return "", false
-		}
-		for _, u := range users {
-			if u.Deleted || u.IsBot {
-				continue
-			}
-			h.userCache[strings.ToLower(u.Name)] = u.ID
-			if u.Profile.DisplayName != "" {
-				h.userCache[strings.ToLower(u.Profile.DisplayName)] = u.ID
-			}
-			if u.RealName != "" {
-				h.userCache[strings.ToLower(u.RealName)] = u.ID
-			}
-		}
-	}
-
-	id, ok := h.userCache[strings.ToLower(name)]
-	return id, ok
-}
-
-// parseReason returns whatever text remains in args after stripping user mentions,
-// resolved plain-text @mentions (extraTokens), and emoji tokens - the recognition
-// reason. May be empty.
-func (h *GiveHandler) parseReason(text string, extraTokens []string) string {
+// parseReason returns whatever text remains in args after stripping user mentions and
+// emoji tokens - the recognition reason. May be empty.
+func (h *GiveHandler) parseReason(text string) string {
 	reason := userRegex.ReplaceAllString(text, "")
 	reason = h.emojiRegex().ReplaceAllString(reason, "")
-	for _, tok := range extraTokens {
-		reason = strings.ReplaceAll(reason, tok, "")
-	}
 	return strings.TrimSpace(reason)
 }
 
