@@ -110,10 +110,10 @@ func TestCandidatesForMention_TrailingPunctuation(t *testing.T) {
 }
 
 func TestIsDirectMessage(t *testing.T) {
-	if !isDirectMessage("D12345") {
+	if !IsDirectMessage("D12345") {
 		t.Error("expected D-prefixed channel to be a direct message")
 	}
-	if isDirectMessage("C12345") {
+	if IsDirectMessage("C12345") {
 		t.Error("expected C-prefixed channel not to be a direct message")
 	}
 }
