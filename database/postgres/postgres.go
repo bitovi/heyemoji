@@ -113,9 +113,9 @@ func (d *Driver) GiveKarma(ctx context.Context, events []database.KarmaEvent, si
 	batch := &pgx.Batch{}
 	for _, ev := range events {
 		batch.Queue(
-			`INSERT INTO karma_events (from_user, to_user, emoji, points, reason, channel_id, thread_ts)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-			ev.From, ev.To, ev.Emoji, ev.Points, ev.Reason, ev.ChannelID, nullable(ev.ThreadTS),
+			`INSERT INTO karma_events (from_user, to_user, emoji, points, reason, source_channel_id, thread_channel_id, thread_ts)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+			ev.From, ev.To, ev.Emoji, ev.Points, ev.Reason, ev.SourceChannelID, nullable(ev.ThreadChannelID), nullable(ev.ThreadTS),
 		)
 	}
 
@@ -140,15 +140,15 @@ func (d *Driver) GiveKarma(ctx context.Context, events []database.KarmaEvent, si
 	return inserted, dailyCap - (alreadyGiven + batchTotal), nil
 }
 
-// LatestThreadTS returns the thread_ts of the most recent event for (channelID,
+// LatestThreadTS returns the thread_ts of the most recent event for (threadChannelID,
 // toUser) created after since, if any.
-func (d *Driver) LatestThreadTS(ctx context.Context, channelID, toUser string, since time.Time) (string, bool, error) {
+func (d *Driver) LatestThreadTS(ctx context.Context, threadChannelID, toUser string, since time.Time) (string, bool, error) {
 	var ts string
 	err := d.pool.QueryRow(ctx, `
 		SELECT thread_ts FROM karma_events
-		WHERE channel_id = $1 AND to_user = $2 AND created_at > $3 AND thread_ts IS NOT NULL
+		WHERE thread_channel_id = $1 AND to_user = $2 AND created_at > $3 AND thread_ts IS NOT NULL
 		ORDER BY created_at DESC LIMIT 1`,
-		channelID, toUser, since,
+		threadChannelID, toUser, since,
 	).Scan(&ts)
 	if err == pgx.ErrNoRows {
 		return "", false, nil
@@ -198,7 +198,7 @@ func (d *Driver) QueryKarmaReceived(ctx context.Context, user string, since time
 // QueryFeed returns the most recent recognition events (newest first), up to limit.
 func (d *Driver) QueryFeed(ctx context.Context, limit int) ([]database.KarmaEvent, error) {
 	rows, err := d.pool.Query(ctx, `
-		SELECT id, from_user, to_user, emoji, points, COALESCE(reason, ''), COALESCE(channel_id, ''), created_at
+		SELECT id, from_user, to_user, emoji, points, COALESCE(reason, ''), COALESCE(source_channel_id, ''), created_at
 		FROM karma_events
 		ORDER BY created_at DESC
 		LIMIT $1`,
@@ -212,7 +212,7 @@ func (d *Driver) QueryFeed(ctx context.Context, limit int) ([]database.KarmaEven
 	var events []database.KarmaEvent
 	for rows.Next() {
 		var ev database.KarmaEvent
-		if err := rows.Scan(&ev.ID, &ev.From, &ev.To, &ev.Emoji, &ev.Points, &ev.Reason, &ev.ChannelID, &ev.CreatedAt); err != nil {
+		if err := rows.Scan(&ev.ID, &ev.From, &ev.To, &ev.Emoji, &ev.Points, &ev.Reason, &ev.SourceChannelID, &ev.CreatedAt); err != nil {
 			return nil, err
 		}
 		events = append(events, ev)
@@ -223,7 +223,7 @@ func (d *Driver) QueryFeed(ctx context.Context, limit int) ([]database.KarmaEven
 // QueryEventsSince returns every event created after since, oldest first.
 func (d *Driver) QueryEventsSince(ctx context.Context, since time.Time) ([]database.KarmaEvent, error) {
 	rows, err := d.pool.Query(ctx, `
-		SELECT id, from_user, to_user, emoji, points, COALESCE(reason, ''), COALESCE(channel_id, ''), created_at
+		SELECT id, from_user, to_user, emoji, points, COALESCE(reason, ''), COALESCE(source_channel_id, ''), created_at
 		FROM karma_events
 		WHERE created_at > $1
 		ORDER BY created_at ASC`,
@@ -237,7 +237,7 @@ func (d *Driver) QueryEventsSince(ctx context.Context, since time.Time) ([]datab
 	var events []database.KarmaEvent
 	for rows.Next() {
 		var ev database.KarmaEvent
-		if err := rows.Scan(&ev.ID, &ev.From, &ev.To, &ev.Emoji, &ev.Points, &ev.Reason, &ev.ChannelID, &ev.CreatedAt); err != nil {
+		if err := rows.Scan(&ev.ID, &ev.From, &ev.To, &ev.Emoji, &ev.Points, &ev.Reason, &ev.SourceChannelID, &ev.CreatedAt); err != nil {
 			return nil, err
 		}
 		events = append(events, ev)

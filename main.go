@@ -37,7 +37,10 @@ func main() {
 	register(event.NewHelpHandler(cfg.SlackDailyCap, cfg.TestMode, cfg.SlackEmojiMap))
 	register(event.NewPointsHandler(cfg.SlackDailyCap, cfg.TestMode, db))
 	register(event.NewLeaderHandler(cfg.MaxLeaderEntries, db))
-	register(event.NewGiveHandler(cfg.SlackEmojiMap, cfg.SlackDailyCap, cfg.TestMode, db))
+	register(event.NewGiveHandler(cfg.SlackEmojiMap, cfg.SlackDailyCap, cfg.TestMode, cfg.AnnounceChannelID, db))
+	if cfg.AnnounceChannelID == "" {
+		log.Println("HEY_ANNOUNCE_CHANNEL_ID is not set: gives will be recorded but no public announcement will be posted")
+	}
 
 	googleConfigured := cfg.GoogleClientID != "" && cfg.GoogleClientSecret != "" && cfg.SessionSecret != ""
 	switch {

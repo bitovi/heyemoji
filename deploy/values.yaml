@@ -15,6 +15,12 @@
 # HEY_TEST_MODE and HEY_WEB_AUTH_DISABLED are deliberately pinned to "false"
 # below (not just left unset) so production never silently runs with an
 # unlimited give cap or a web UI open to anyone with no sign-in.
+#
+# HEY_ANNOUNCE_CHANNEL_ID is intentionally left unset below - fill it in with
+# the target Slack channel ID (right-click the channel > View channel details
+# > Channel ID, at the bottom) once it's picked, and make sure the bot is
+# invited to it. Until then gives are still recorded, just with no public
+# announcement (the giver still gets a DM confirmation either way).
 name: heyemoji
 repo: bitovi/heyemoji
 workloads:

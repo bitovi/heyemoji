@@ -163,7 +163,7 @@ func (s *Server) handleFeed(w http.ResponseWriter, r *http.Request) {
 	rows := make([]feedRow, 0, len(events))
 	for _, ev := range events {
 		fromName := s.resolveDisplayName(r.Context(), ev.From)
-		channelName, channelURL := s.resolveChannel(r.Context(), ev.ChannelID)
+		channelName, channelURL := s.resolveChannel(r.Context(), ev.SourceChannelID)
 		rows = append(rows, feedRow{
 			FromName:    fromName,
 			FromInitial: initialOf(fromName),
