@@ -155,6 +155,12 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 				"Your point balance will reset in *%s*.",
 			batchTotal, balance, FmtDuration(TimeTillPointReset())))
 	}
+	if err == database.ErrSelfKarma {
+		// Should be unreachable - recipients never includes cmd.UserID - but the
+		// database enforces it too (karma_events_no_self_karma), so handle it with the
+		// same friendly message rather than a raw error if it's somehow ever hit.
+		return h.replyEphemeral(ctx, client, cmd, "Sorry, you can only give emoji points to other people on your team.")
+	}
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5" // registers the "pgx5" migrate scheme
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/bitovi/heyemoji/database"
@@ -126,6 +128,10 @@ func (d *Driver) GiveKarma(ctx context.Context, events []database.KarmaEvent, si
 	for i := range events {
 		if err := br.QueryRow().Scan(&inserted[i].ID); err != nil {
 			br.Close()
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.ConstraintName == "karma_events_no_self_karma" {
+				return nil, 0, database.ErrSelfKarma
+			}
 			return nil, 0, err
 		}
 	}

@@ -11,6 +11,13 @@ import (
 // events are inserted when this is returned.
 var ErrDailyCapExceeded = errors.New("daily karma cap exceeded")
 
+// ErrSelfKarma is returned by GiveKarma if any event has From == To. event/give.go
+// already filters the giver out of recipients before ever calling GiveKarma, so this
+// should be unreachable in practice - it's a backstop for the database's own
+// karma_events_no_self_karma CHECK constraint, translated into a typed error instead
+// of a raw driver error, in case that application-level filter ever has a bug.
+var ErrSelfKarma = errors.New("cannot give karma to yourself")
+
 // KarmaEvent is one recognition grant: a single (from, to, emoji) triple and its
 // point value and reason. Giving multiple emoji and/or to multiple recipients in one
 // /heybitovi give produces multiple KarmaEvents.
