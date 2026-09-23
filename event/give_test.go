@@ -50,9 +50,38 @@ func TestGiveHandler_ParseReason(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := h.parseReason(c.text); got != c.want {
+		if got := h.parseReason(c.text, nil); got != c.want {
 			t.Errorf("parseReason(%q) = %q, want %q", c.text, got, c.want)
 		}
+	}
+}
+
+func TestFindPlainMentions_Basic(t *testing.T) {
+	// A bare "@username" (not <@...> markup) is a candidate; a real mention's
+	// <@U123|bob> internals must not also be picked up as a candidate.
+	got := findPlainMentions("<@U123|bob> @luca :star: because they crushed it")
+	want := []plainMentionToken{{name: "luca", token: "@luca"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("findPlainMentions() = %+v, want %+v", got, want)
+	}
+}
+
+func TestFindPlainMentions_TrailingPunctuation(t *testing.T) {
+	got := findPlainMentions("Thanks @luca, for everything")
+	want := []plainMentionToken{{name: "luca", token: "@luca"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("findPlainMentions() = %+v, want %+v", got, want)
+	}
+}
+
+func TestFindPlainMentions_Multiple(t *testing.T) {
+	got := findPlainMentions("@luca and @kyle :star: nice work both of you")
+	want := []plainMentionToken{
+		{name: "luca", token: "@luca"},
+		{name: "kyle", token: "@kyle"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("findPlainMentions() = %+v, want %+v", got, want)
 	}
 }
 
