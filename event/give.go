@@ -60,8 +60,11 @@ func (h *GiveHandler) effectiveDailyCap() int {
 // Execute parses "@user :emoji: optional reason text" out of args, gives the
 // recognized users the corresponding emoji points (deducted once from the giver's
 // daily balance per emoji per recipient), and announces the recognition publicly in
-// the channel the command was run from, with a private confirmation of the giver's
-// remaining balance.
+// the channel the command was run from. The giver always gets a DM confirming the
+// points were recorded, regardless of whether the public announcement posted - DMs
+// don't require channel membership the way chat.postMessage/postEphemeral into
+// cmd.ChannelID do, so this is the one confirmation path that works even from a
+// private channel the bot hasn't been invited to.
 func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
 	if isDirectMessage(cmd.ChannelID) {
 		return h.replyEphemeral(ctx, client, cmd, "Sorry, you can only give people emoji points in channels.")
@@ -158,9 +161,11 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 		byRecipient[ev.To] = append(byRecipient[ev.To], ev)
 	}
 
+	var failedAnnouncements []string // recipient user IDs whose public announcement didn't post
 	for _, u := range recipients {
 		if err := h.announce(ctx, client, cmd, u, byRecipient[u], existingThreadTS[u]); err != nil {
 			log.Printf("give: failed to post announcement for recipient %s: %v", u, err)
+			failedAnnouncements = append(failedAnnouncements, u)
 		}
 	}
 
@@ -175,7 +180,13 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	if gaveSelfKarma {
 		confirmation += " (Note: you can't give points to yourself, so that part was skipped.)"
 	}
-	return h.replyEphemeral(ctx, client, cmd, confirmation)
+	if len(failedAnnouncements) > 0 {
+		failedMentions := Map(failedAnnouncements, func(u string) string { return fmt.Sprintf("<@%s>", u) })
+		confirmation += fmt.Sprintf(
+			"\n\n:warning: I couldn't post the public recognition message in <#%s> for %s - I'm probably not a member of that channel (common for private channels, which I can never join automatically). The points were still given; `/invite @HeyBitovi` to that channel to get public announcements there too.",
+			cmd.ChannelID, strings.Join(failedMentions, " "))
+	}
+	return h.dmUser(ctx, client, cmd.UserID, confirmation)
 }
 
 // announce posts the public recognition message for one recipient's slice of newly
@@ -227,6 +238,15 @@ func (h *GiveHandler) announce(ctx context.Context, client *slack.Client, cmd sl
 
 func (h *GiveHandler) replyEphemeral(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, msg string) error {
 	_, err := client.PostEphemeralContext(ctx, cmd.ChannelID, cmd.UserID, slack.MsgOptionText(msg, false))
+	return err
+}
+
+// dmUser sends userID a direct message. chat.postMessage auto-opens the DM channel on
+// first use - no separate conversations.open call or extra OAuth scope needed - and
+// unlike posting into cmd.ChannelID, it works regardless of whether the bot has ever
+// been added to any channel the user is in.
+func (h *GiveHandler) dmUser(ctx context.Context, client *slack.Client, userID, msg string) error {
+	_, _, err := client.PostMessageContext(ctx, userID, slack.MsgOptionText(msg, false))
 	return err
 }
 
