@@ -41,6 +41,10 @@
     --cat-3: #9245d5;
   }
 
+  {{/* --brand-800 is deliberately absent below: it's only ever used as a fixed dark
+       color against an explicit white background (header bg, active-tab text-on-
+       white pill), never against --brand-100, so it must NOT track dark mode. Text
+       drawn on --brand-100 (which does flip) uses --brand-700 instead. */}}
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #012c2f;
@@ -119,7 +123,7 @@
     text-transform: capitalize;
     transition: background 0.15s, color 0.15s;
   }
-  .periods a:hover { background: var(--brand-100); color: var(--brand-800); }
+  .periods a:hover { background: var(--brand-100); color: var(--brand-700); }
   .periods a.active { background: var(--brand-600); color: #fff; }
   .when-picker {
     margin-left: 4px;
@@ -169,7 +173,7 @@
   .points-pill {
     display: inline-block;
     background: var(--brand-100);
-    color: var(--brand-800);
+    color: var(--brand-700);
     font-weight: 600;
     padding: 3px 10px;
     border-radius: 999px;
