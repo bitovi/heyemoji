@@ -24,7 +24,7 @@ workloads:
     health: /healthz
     domain: heybitovi.bitovi-tools.com
     image:
-      tag: v0.1.0
+      tag: v0.2.0
     env:
       HEY_BOT_NAME: HeyBitovi
       HEY_BASE_URL: https://heybitovi.bitovi-tools.com
