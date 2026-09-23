@@ -60,15 +60,14 @@ func (h *GiveHandler) effectiveDailyCap() int {
 // Execute parses "@user :emoji: optional reason text" out of args, gives the
 // recognized users the corresponding emoji points (deducted once from the giver's
 // daily balance per emoji per recipient), and announces the recognition publicly in
-// the channel the command was run from. The giver always gets a DM confirming the
-// points were recorded, regardless of whether the public announcement posted - DMs
-// don't require channel membership the way chat.postMessage/postEphemeral into
-// cmd.ChannelID do, so this is the one confirmation path that works even from a
-// private channel the bot hasn't been invited to.
+// the channel the command was run from - unless that "channel" is a DM with the bot,
+// which has nowhere public to announce into, so the announcement is skipped entirely
+// there. The giver always gets a DM confirming the points were recorded, regardless of
+// whether (or why) the public announcement didn't post - DMs don't require channel
+// membership the way chat.postMessage/postEphemeral into cmd.ChannelID do, so this is
+// the one confirmation path that works everywhere.
 func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
-	if isDirectMessage(cmd.ChannelID) {
-		return h.replyEphemeral(ctx, client, cmd, "Sorry, you can only give people emoji points in channels.")
-	}
+	isDM := isDirectMessage(cmd.ChannelID)
 
 	emojis := h.parseEmojis(args)
 	if len(emojis) == 0 {
@@ -162,10 +161,12 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	}
 
 	var failedAnnouncements []string // recipient user IDs whose public announcement didn't post
-	for _, u := range recipients {
-		if err := h.announce(ctx, client, cmd, u, byRecipient[u], existingThreadTS[u]); err != nil {
-			log.Printf("give: failed to post announcement for recipient %s: %v", u, err)
-			failedAnnouncements = append(failedAnnouncements, u)
+	if !isDM {
+		for _, u := range recipients {
+			if err := h.announce(ctx, client, cmd, u, byRecipient[u], existingThreadTS[u]); err != nil {
+				log.Printf("give: failed to post announcement for recipient %s: %v", u, err)
+				failedAnnouncements = append(failedAnnouncements, u)
+			}
 		}
 	}
 
@@ -180,7 +181,9 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	if gaveSelfKarma {
 		confirmation += " (Note: you can't give points to yourself, so that part was skipped.)"
 	}
-	if len(failedAnnouncements) > 0 {
+	if isDM {
+		confirmation += "\n\n(No public recognition message was posted, since this was a DM - only you can see this. Run `/heybitovi give` from a channel instead if you want the team to see it.)"
+	} else if len(failedAnnouncements) > 0 {
 		failedMentions := Map(failedAnnouncements, func(u string) string { return fmt.Sprintf("<@%s>", u) })
 		confirmation += fmt.Sprintf(
 			"\n\n:warning: I couldn't post the public recognition message in <#%s> for %s - I'm probably not a member of that channel (common for private channels, which I can never join automatically). The points were still given; `/invite @HeyBitovi` to that channel to get public announcements there too.",
