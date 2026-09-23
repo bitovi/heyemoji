@@ -15,6 +15,7 @@ import (
 	"github.com/slack-go/slack"
 
 	"github.com/bitovi/heyemoji/database"
+	"github.com/bitovi/heyemoji/event"
 )
 
 //go:embed templates/*.html
@@ -134,7 +135,17 @@ func (s *Server) resolveDisplayName(ctx context.Context, userID string) string {
 // The link itself needs no scope and always works: it's just a URL built from the
 // workspace's domain, resolved by the viewer's own Slack session rather than the
 // bot's access.
+//
+// A DM is a deliberate exception: give lets someone give recognition from a DM with
+// the bot (skipping the public announcement, since there's no channel to post into),
+// and those events still land in the feed. Linking to a DM channel would be useless to
+// anyone but its one participant - Slack denies everyone else access to it - so this
+// labels it plainly instead of resolving a name or building a link.
 func (s *Server) resolveChannel(ctx context.Context, channelID string) (name, url string) {
+	if event.IsDirectMessage(channelID) {
+		return "Given via DM", ""
+	}
+
 	url = s.channelURL(ctx, channelID)
 
 	s.mu.Lock()

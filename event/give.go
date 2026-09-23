@@ -67,7 +67,7 @@ func (h *GiveHandler) effectiveDailyCap() int {
 // membership the way chat.postMessage/postEphemeral into cmd.ChannelID do, so this is
 // the one confirmation path that works everywhere.
 func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, args string) error {
-	isDM := isDirectMessage(cmd.ChannelID)
+	isDM := IsDirectMessage(cmd.ChannelID)
 
 	emojis := h.parseEmojis(args)
 	if len(emojis) == 0 {
@@ -403,6 +403,10 @@ func (h *GiveHandler) parseReason(text string, extraTokens []string) string {
 	return strings.TrimSpace(reason)
 }
 
-func isDirectMessage(channelID string) bool {
+// IsDirectMessage reports whether channelID is a DM (a Slack channel ID conversation
+// with a single other user), not a public or private channel. Exported so other
+// packages (the web UI's feed rendering) can recognize the same convention rather than
+// re-deriving it.
+func IsDirectMessage(channelID string) bool {
 	return strings.HasPrefix(channelID, "D")
 }
