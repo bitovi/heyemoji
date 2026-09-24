@@ -36,7 +36,7 @@ func TestResolvePeriod_Day(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
-	if want := time.Date(2026, 9, 20, 0, 0, 0, 0, businessLocation); !target.Equal(want) {
+	if want := time.Date(2026, 9, 21, 0, 0, 0, 0, businessLocation); !target.Equal(want) {
 		t.Errorf("target = %v, want %v", target, want)
 	}
 	if header != "Today's Leaderboard" {

@@ -44,7 +44,7 @@ func ResolvePeriod(period string, now time.Time) (target time.Time, header strin
 
 	switch period {
 	case "day":
-		return dayStart.AddDate(0, 0, -1), "Today's Leaderboard", true
+		return dayStart, "Today's Leaderboard", true
 	case "week":
 		offset := (int(dayStart.Weekday()) + 6) % 7 // Monday = 0
 		return dayStart.AddDate(0, 0, -offset), "This Week's Leaderboard", true
