@@ -226,9 +226,9 @@ func (h *GiveHandler) announce(ctx context.Context, client *slack.Client, cmd sl
 		ids = append(ids, ev.ID)
 	}
 
-	text := fmt.Sprintf("%s <@%s> gave recognition to <@%s>", strings.Join(emojiText, " "), cmd.UserID, recipient)
+	text := fmt.Sprintf("<@%s> gave %s to <@%s>", cmd.UserID, strings.Join(emojiText, " "), recipient)
 	if reason != "" {
-		text += fmt.Sprintf(": %s", reason)
+		text += fmt.Sprintf(" - %s", reason)
 	}
 
 	opts := []slack.MsgOption{slack.MsgOptionText(text, false)}
