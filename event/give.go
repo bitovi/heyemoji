@@ -91,15 +91,7 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 	plainIDs, resolvedTokens := h.resolvePlainMentions(ctx, client, args)
 	users = append(users, plainIDs...)
 
-	gaveSelfKarma := false
-	recipients := make([]string, 0, len(users))
-	for _, u := range users {
-		if u == cmd.UserID {
-			gaveSelfKarma = true
-			continue
-		}
-		recipients = append(recipients, u)
-	}
+	recipients, gaveSelfKarma := uniqueRecipients(users, cmd.UserID)
 
 	if len(recipients) == 0 {
 		if gaveSelfKarma {
@@ -202,6 +194,28 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 			strings.Join(failedMentions, " "), h.announceChannelID)
 	}
 	return h.dmUser(ctx, client, cmd.UserID, confirmation)
+}
+
+// uniqueRecipients drops giver and any repeated user IDs from users, keeping
+// first-seen order. The same person can show up more than once (named twice, or
+// matched by both <@U...> markup and a plain @username) - without this they'd get
+// double points and a duplicate announcement. gaveSelf reports whether giver was
+// among users.
+func uniqueRecipients(users []string, giver string) (recipients []string, gaveSelf bool) {
+	recipients = make([]string, 0, len(users))
+	seen := make(map[string]bool, len(users))
+	for _, u := range users {
+		if u == giver {
+			gaveSelf = true
+			continue
+		}
+		if seen[u] {
+			continue
+		}
+		seen[u] = true
+		recipients = append(recipients, u)
+	}
+	return recipients, gaveSelf
 }
 
 // announce posts the public recognition message for one recipient's slice of newly

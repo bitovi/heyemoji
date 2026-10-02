@@ -85,6 +85,31 @@ func TestFindPlainMentions_Multiple(t *testing.T) {
 	}
 }
 
+func TestUniqueRecipients(t *testing.T) {
+	cases := []struct {
+		name         string
+		users        []string
+		wantUsers    []string
+		wantGaveSelf bool
+	}{
+		// Covers both "named twice" and "matched via <@U...> markup and a plain
+		// @username" - either way the same ID arrives twice by this point.
+		{"same recipient twice", []string{"U123", "U123"}, []string{"U123"}, false},
+		{"order preserved", []string{"U456", "U123", "U456"}, []string{"U456", "U123"}, false},
+		{"giver removed", []string{"UGIVER", "U123"}, []string{"U123"}, true},
+		{"only giver", []string{"UGIVER", "UGIVER"}, []string{}, true},
+		{"none", nil, []string{}, false},
+	}
+
+	for _, c := range cases {
+		gotUsers, gotGaveSelf := uniqueRecipients(c.users, "UGIVER")
+		if !reflect.DeepEqual(gotUsers, c.wantUsers) || gotGaveSelf != c.wantGaveSelf {
+			t.Errorf("%s: uniqueRecipients(%v) = %v, %v; want %v, %v",
+				c.name, c.users, gotUsers, gotGaveSelf, c.wantUsers, c.wantGaveSelf)
+		}
+	}
+}
+
 func TestIsDirectMessage(t *testing.T) {
 	if !IsDirectMessage("D12345") {
 		t.Error("expected D-prefixed channel to be a direct message")
