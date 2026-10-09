@@ -3,6 +3,8 @@ package event
 import (
 	"reflect"
 	"testing"
+
+	"github.com/bitovi/heyemoji/database"
 )
 
 func TestGiveHandler_EffectiveDailyCap(t *testing.T) {
@@ -116,5 +118,47 @@ func TestIsDirectMessage(t *testing.T) {
 	}
 	if IsDirectMessage("C12345") {
 		t.Error("expected C-prefixed channel not to be a direct message")
+	}
+}
+
+func TestGiveHandler_ShouldPostToSource(t *testing.T) {
+	h := NewGiveHandler(map[string]int{"star": 1}, 5, false, "CGENERAL", nil)
+
+	tests := []struct {
+		channelID string
+		want      bool
+	}{
+		{"CRANDOM", true},   // public channel
+		{"GPRIVATE", true},  // private channel
+		{"CGENERAL", false}, // the announcement channel itself - would duplicate
+		{"D0123456", false}, // DM
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := h.shouldPostToSource(tt.channelID); got != tt.want {
+			t.Errorf("shouldPostToSource(%q) = %v, want %v", tt.channelID, got, tt.want)
+		}
+	}
+
+	noAnnounce := NewGiveHandler(map[string]int{"star": 1}, 5, false, "", nil)
+	if !noAnnounce.shouldPostToSource("CRANDOM") {
+		t.Error("shouldPostToSource(\"CRANDOM\") with no announce channel = false, want true")
+	}
+}
+
+func TestAnnouncementText(t *testing.T) {
+	events := []database.KarmaEvent{
+		{Emoji: "star", Reason: "shipped it"},
+		{Emoji: "clap", Reason: "shipped it"},
+		{Emoji: "star", Reason: "shipped it"},
+	}
+	got := announcementText("UGIVER", "URECIP", events)
+	want := "<@UGIVER> gave :star: :clap: to <@URECIP> - shipped it"
+	if got != want {
+		t.Errorf("announcementText() = %q, want %q", got, want)
+	}
+
+	if got := announcementText("UGIVER", "URECIP", []database.KarmaEvent{{Emoji: "star"}}); got != "<@UGIVER> gave :star: to <@URECIP>" {
+		t.Errorf("announcementText() with no reason = %q", got)
 	}
 }

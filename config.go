@@ -18,8 +18,8 @@ type Config struct {
 	MaxLeaderEntries int
 	// AnnounceChannelID is the Slack channel ID (e.g. "C0123456789", not a channel
 	// name) every /heybitovi give announcement posts to and threads under, regardless
-	// of which channel or DM the command was run from. The bot must be a member of
-	// it. If empty, gives are still recorded but no public announcement is posted -
+	// of which channel or DM the command was run from (a separate copy also posts in
+	// the channel the command was run from). The bot must be a member of it. If empty, gives are still recorded but no public announcement is posted -
 	// the giver's DM confirmation says so.
 	AnnounceChannelID string
 	// TestMode, when true, disables the daily give cap entirely (everyone has
