@@ -9,6 +9,7 @@ The `heyemoji` bot (Slack-facing name: **HeyBitovi**) is a self-hosted slack rew
 
 - [Usage](#basic-usage)
 - [Setup](#setup)
+  - [Slack app permissions](#slack-app-permissions)
 - [Web UI Setup](#web-ui-setup)
 - [Configuration](#configuration)
 
@@ -83,6 +84,25 @@ The fastest way is from a manifest, which sets up the bot user, slash command, s
    Don't want to use a manifest? Click through it manually instead: **Slash Commands** > create `/heybitovi` (leave Request URL blank — Socket Mode delivers it); **OAuth & Permissions** > **Scopes** > add the `chat:write`, `chat:write.public`, `commands`, and `users:read` **Bot Token Scopes**; **Socket Mode** > toggle it on; **App Home** > **Show Tabs** > enable **Messages Tab** and check **"Allow users to send Slash commands and messages from the messages tab"** (without this, DMing the bot shows "Sending messages to this app has been turned off" and you can't type anything into the DM, slash commands included).
 
    Renaming an app you already created? **Basic Information** > **Display Information** > update **App Name**; **App Home** > **Your App's Presence in Slack** > update the bot's **Display Name**; **Slash Commands** > edit the existing command's **Command** field from `/heyemoji` to `/heybitovi` (Slack lets you rename a command in place, no need to delete and recreate it).
+
+### Slack app permissions
+
+Scopes granted to the production **HeyBitovi** app, as of 2026-10-09 (Slack app settings > **OAuth & Permissions** > **Scopes**). The manifest above requests the same set.
+
+**Bot Token Scopes**
+
+| Scope | Why the bot needs it | API methods |
+|---|---|---|
+| `chat:write` | Post the #general announcement, the source-channel copy, DM confirmations, and private (ephemeral) replies | `chat.postMessage`, `chat.postEphemeral` |
+| `chat:write.public` | Post the source-channel copy in public channels the bot hasn't been invited to. Private channels still need `/invite @HeyBitovi` | `chat.postMessage` |
+| `commands` | Register the `/heybitovi` slash command | — |
+| `users:read` | Resolve `@username` mentions in `give`, and show real names in the web UI | `users.list`, `users.info` |
+
+**App-level token:** `connections:write`, used for Socket Mode.
+
+**User Token Scopes:** none.
+
+**Not granted:** `channels:read` / `groups:read`. Without these, the web UI feed can't resolve a channel ID to a name such as `#general`, so it shows the raw channel ID. The link to the channel still works, because it's built from `auth.test`, which needs no scope.
 
 ### 2. Generate your tokens
 
