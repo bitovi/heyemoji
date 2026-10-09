@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HeyBitovi architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700&family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:  #f4f5f5;
+      --color-ink:    #002a2d;
+      --color-muted:  #04646a;
+      --color-accent: #f5532d;
+      --font-sans:    'Inter', system-ui, sans-serif;
+      --font-title:   'Poppins', system-ui, sans-serif;
+      --font-mono:    'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-title);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 1.75rem);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 0.5rem;
+    }
+    .lede { font-size: 0.95rem; color: var(--color-muted); max-width: 64ch; margin-bottom: 1.5rem; line-height: 1.5; }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · HeyBitovi</p>
+    <h1>HeyBitovi architecture</h1>
+    <p class="lede">One Go binary, one pod. The bot handles <code>/heybitovi</code> over Slack Socket Mode; the web UI serves the leaderboard and feed behind Google sign-in. Both share the platform-managed Postgres.</p>
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc">
+        <title id="architecture-title">HeyBitovi architecture</title>
+        <desc id="architecture-desc">One Go binary on Bitovi Platform runs a Slack slash-command bot over Socket Mode and a Google-protected web UI, both backed by one Postgres database.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04646a"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f5532d"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2755a1"/></marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#04646a" stroke-width="1.2"/></marker>
+        </defs>
+        <rect width="100%" height="100%" fill="#f4f5f5"/>
+
+      <rect x="600" y="112" width="464" height="448" rx="8" fill="rgba(0,42,45,0.02)" stroke="rgba(0,42,45,0.14)" stroke-width="0.8"/>
+      <rect x="612" y="116" width="100" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="662" y="125" fill="#687879" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">BITOVI PLATFORM</text>
+      <rect x="624" y="144" width="256" height="400" rx="8" fill="rgba(0,42,45,0.02)" stroke="rgba(0,42,45,0.14)" stroke-width="0.8"/>
+      <rect x="636" y="148" width="112" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="692" y="157" fill="#687879" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">HEYEMOJI POD · GO</text>
+      <path d="M240,208 H336" fill="none" stroke="#04646a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="252" y="188" width="72" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="288" y="197" fill="#04646a" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">/HEYBITOVI</text>
+      <path d="M528,196 H648" fill="none" stroke="#2755a1" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="546" y="176" width="84" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="588" y="185" fill="#2755a1" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">EVENTS · WSS</text>
+      <path d="M648,220 H528" fill="none" stroke="#2755a1" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="554" y="228" width="68" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="588" y="237" fill="#2755a1" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">CHAT.POST</text>
+      <path d="M856,208 H968 Q976,208 976,216 V312" fill="none" stroke="#04646a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="984" y="258" width="44" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="1006" y="267" fill="#04646a" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">WRITE</text>
+      <path d="M856,468 H968 Q976,468 976,460 V376" fill="none" stroke="#04646a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="984" y="414" width="40" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="1004" y="423" fill="#04646a" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">READ</text>
+      <path d="M856,492 H1096" fill="none" stroke="#2755a1" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="1020" y="500" width="40" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="1040" y="509" fill="#2755a1" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">OIDC</text>
+      <path d="M648,468 H440 Q432,468 432,460 V248" fill="none" stroke="#2755a1" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <rect x="440" y="354" width="72" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="476" y="363" fill="#2755a1" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">USERS.INFO</text>
+      <path d="M240,492 H648" fill="none" stroke="#04646a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="314" y="472" width="44" height="12" rx="2" fill="#f4f5f5"/>
+      <text x="336" y="481" fill="#04646a" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.06em">HTTPS</text>
+      <rect x="64" y="176" width="176" height="64" rx="6" fill="#f4f5f5"/>
+      <rect x="64" y="176" width="176" height="64" rx="6" fill="rgba(4,100,106,0.10)" stroke="#687879" stroke-width="1"/>
+      <rect x="72" y="184" width="36" height="12" rx="2" fill="transparent" stroke="rgba(104,120,121,0.40)" stroke-width="0.8"/>
+      <text x="90" y="193" fill="#687879" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">USERS</text>
+      <text x="152" y="212" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Slack users</text>
+      <text x="152" y="227" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">any channel or DM</text>
+      <rect x="336" y="168" width="192" height="80" rx="6" fill="#f4f5f5"/>
+      <rect x="336" y="168" width="192" height="80" rx="6" fill="rgba(0,42,45,0.03)" stroke="rgba(0,42,45,0.30)" stroke-width="1"/>
+      <rect x="344" y="176" width="32" height="12" rx="2" fill="transparent" stroke="rgba(0,42,45,0.25)" stroke-width="0.8"/>
+      <text x="360" y="185" fill="#687879" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SAAS</text>
+      <text x="432" y="212" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Slack</text>
+      <text x="432" y="227" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">Socket Mode · Web API</text>
+      <rect x="648" y="176" width="208" height="64" rx="6" fill="#f4f5f5"/>
+      <rect x="648" y="176" width="208" height="64" rx="6" fill="rgba(245,83,45,0.08)" stroke="#f5532d" stroke-width="1"/>
+      <rect x="656" y="184" width="28" height="12" rx="2" fill="transparent" stroke="rgba(245,83,45,0.50)" stroke-width="0.8"/>
+      <text x="670" y="193" fill="#f5532d" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">BOT</text>
+      <text x="752" y="212" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Slash-command bot</text>
+      <text x="752" y="227" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">event/ · /heybitovi</text>
+      <rect x="648" y="448" width="208" height="64" rx="6" fill="#f4f5f5"/>
+      <rect x="648" y="448" width="208" height="64" rx="6" fill="#ffffff" stroke="#002a2d" stroke-width="1"/>
+      <rect x="656" y="456" width="28" height="12" rx="2" fill="transparent" stroke="rgba(0,42,45,0.30)" stroke-width="0.8"/>
+      <text x="670" y="465" fill="#04646a" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">WEB</text>
+      <text x="752" y="484" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Web UI</text>
+      <text x="752" y="499" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">:8080 · /app/*</text>
+      <rect x="904" y="312" width="144" height="64" rx="6" fill="#f4f5f5"/>
+      <rect x="904" y="312" width="144" height="64" rx="6" fill="rgba(0,42,45,0.05)" stroke="#04646a" stroke-width="1"/>
+      <rect x="912" y="320" width="20" height="12" rx="2" fill="transparent" stroke="rgba(4,100,106,0.40)" stroke-width="0.8"/>
+      <text x="922" y="329" fill="#04646a" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+      <text x="976" y="348" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Postgres</text>
+      <text x="976" y="363" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">karma_events</text>
+      <rect x="1096" y="448" width="152" height="64" rx="6" fill="#f4f5f5"/>
+      <rect x="1096" y="448" width="152" height="64" rx="6" fill="rgba(0,42,45,0.03)" stroke="rgba(0,42,45,0.30)" stroke-width="1"/>
+      <rect x="1104" y="456" width="28" height="12" rx="2" fill="transparent" stroke="rgba(0,42,45,0.25)" stroke-width="0.8"/>
+      <text x="1118" y="465" fill="#687879" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">IDP</text>
+      <text x="1172" y="484" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Google OAuth</text>
+      <text x="1172" y="499" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">hd = bitovi.com</text>
+      <rect x="64" y="448" width="176" height="64" rx="6" fill="#f4f5f5"/>
+      <rect x="64" y="448" width="176" height="64" rx="6" fill="rgba(4,100,106,0.10)" stroke="#687879" stroke-width="1"/>
+      <rect x="72" y="456" width="36" height="12" rx="2" fill="transparent" stroke="rgba(104,120,121,0.40)" stroke-width="0.8"/>
+      <text x="90" y="465" fill="#687879" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">USERS</text>
+      <text x="152" y="484" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Browser</text>
+      <text x="152" y="499" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">heybitovi.bitovi-tools</text>
+      <text x="64" y="304" fill="#002a2d" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif">Socket Mode: the bot dials out to Slack,</text>
+      <text x="64" y="322" fill="#002a2d" font-size="14" font-style="italic" font-family="'Instrument Serif', 'Noto Serif', serif">so no public webhook URL is needed.</text>
+      <line x1="64" y1="600" x2="1216" y2="600" stroke="rgba(0,42,45,0.10)" stroke-width="0.8"/>
+      <text x="64" y="618" fill="#04646a" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+      <rect x="64" y="632" width="16" height="10" rx="2" fill="rgba(245,83,45,0.08)" stroke="#f5532d" stroke-width="1"/>
+      <text x="86" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">Focal</text>
+      <rect x="142" y="632" width="16" height="10" rx="2" fill="#ffffff" stroke="#002a2d" stroke-width="1"/>
+      <text x="164" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">Service</text>
+      <rect x="232" y="632" width="16" height="10" rx="2" fill="rgba(0,42,45,0.05)" stroke="#04646a" stroke-width="1"/>
+      <text x="254" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">Data store</text>
+      <rect x="338" y="632" width="16" height="10" rx="2" fill="rgba(0,42,45,0.03)" stroke="rgba(0,42,45,0.30)" stroke-width="1"/>
+      <text x="360" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">External SaaS</text>
+      <rect x="460" y="632" width="16" height="10" rx="2" fill="rgba(4,100,106,0.10)" stroke="#687879" stroke-width="1"/>
+      <text x="482" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">People</text>
+      <rect x="546" y="632" width="16" height="10" rx="2" fill="rgba(0,42,45,0.02)" stroke="rgba(0,42,45,0.22)" stroke-width="0.8"/>
+      <text x="568" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">Deploy boundary</text>
+      <line x1="680" y1="637" x2="704" y2="637" stroke="#2755a1" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <text x="712" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">API call</text>
+      <line x1="784" y1="637" x2="808" y2="637" stroke="#04646a" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="816" y="640" fill="#04646a" font-size="9" font-family="'Inter', system-ui, sans-serif">Internal</text>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

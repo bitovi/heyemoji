@@ -38,8 +38,9 @@ type GiveHandler struct {
 	dailyCap int
 	testMode bool
 	// announceChannelID is where every give's announcement posts and threads,
-	// regardless of where the command was run from. Empty disables public
-	// announcements entirely (gives are still recorded).
+	// regardless of where the command was run from (a separate copy also posts in that
+	// source channel - see shouldPostToSource). Empty disables the announcement-channel
+	// post (gives are still recorded).
 	announceChannelID string
 	db                database.Driver
 
@@ -60,11 +61,11 @@ func (h *GiveHandler) effectiveDailyCap() int {
 // Execute parses "@user :emoji: optional reason text" out of args, gives the
 // recognized users the corresponding emoji points (deducted once from the giver's
 // daily balance per emoji per recipient), and announces the recognition publicly in
-// h.announceChannelID - always that one configured channel, regardless of which
-// channel or DM the command was actually run from (that origin is still recorded, as
-// KarmaEvent.SourceChannelID, purely for the web UI's feed). If no announce channel is
-// configured, the announcement is skipped entirely; points are still recorded either
-// way. The giver always gets a DM confirming the points were recorded, regardless of
+// h.announceChannelID - always that one configured channel, threaded per recipient per
+// day. The same message also posts, as a separate top-level message, in the channel the
+// command was run from (see shouldPostToSource), so people there see it too. If no
+// announce channel is configured, the announcement is skipped; points are still
+// recorded either way. The giver always gets a DM confirming the points were recorded, regardless of
 // whether (or why) the public announcement didn't post - DMs don't require channel
 // membership the way chat.postMessage/postEphemeral into cmd.ChannelID do, so this is
 // the one confirmation path that works everywhere.
@@ -164,12 +165,24 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 		byRecipient[ev.To] = append(byRecipient[ev.To], ev)
 	}
 
+	postToSource := h.shouldPostToSource(cmd.ChannelID)
 	var failedAnnouncements []string // recipient user IDs whose public announcement didn't post
-	if h.announceChannelID != "" {
-		for _, u := range recipients {
-			if err := h.announce(ctx, client, cmd, u, byRecipient[u], existingThreadTS[u]); err != nil {
+	var failedSourcePosts []string   // recipient user IDs whose source-channel post didn't post
+	for _, u := range recipients {
+		if len(byRecipient[u]) == 0 {
+			continue
+		}
+		text := announcementText(cmd.UserID, u, byRecipient[u])
+		if h.announceChannelID != "" {
+			if err := h.announce(ctx, client, text, byRecipient[u], existingThreadTS[u]); err != nil {
 				log.Printf("give: failed to post announcement for recipient %s: %v", u, err)
 				failedAnnouncements = append(failedAnnouncements, u)
+			}
+		}
+		if postToSource {
+			if _, _, err := client.PostMessageContext(ctx, cmd.ChannelID, slack.MsgOptionText(text, false)); err != nil {
+				log.Printf("give: failed to post in source channel %s for recipient %s: %v", cmd.ChannelID, u, err)
+				failedSourcePosts = append(failedSourcePosts, u)
 			}
 		}
 	}
@@ -192,6 +205,11 @@ func (h *GiveHandler) Execute(ctx context.Context, client *slack.Client, cmd sla
 		confirmation += fmt.Sprintf(
 			"\n\n:warning: I couldn't post the public recognition message for %s - I may not be a member of the announcement channel anymore. The points were still given; someone should check that I'm still invited to <#%s>.",
 			strings.Join(failedMentions, " "), h.announceChannelID)
+	}
+	if len(failedSourcePosts) > 0 {
+		confirmation += fmt.Sprintf(
+			"\n\n(I couldn't post the recognition in <#%s> - if it's a private channel, `/invite` me to it.)",
+			cmd.ChannelID)
 	}
 	return h.dmUser(ctx, client, cmd.UserID, confirmation)
 }
@@ -218,31 +236,45 @@ func uniqueRecipients(users []string, giver string) (recipients []string, gaveSe
 	return recipients, gaveSelf
 }
 
-// announce posts the public recognition message for one recipient's slice of newly
-// inserted events, threading it onto existingTS if the recipient already had an open
-// thread today, or starting a fresh top-level message and backfilling its ts onto
-// those rows otherwise.
-func (h *GiveHandler) announce(ctx context.Context, client *slack.Client, cmd slack.SlashCommand, recipient string, events []database.KarmaEvent, existingTS string) error {
-	if len(events) == 0 {
-		return nil
-	}
+// shouldPostToSource reports whether a give run from channelID should also post its
+// recognition message there, in addition to the announcement channel. Skipped when
+// the command was run in the announcement channel itself (it would just duplicate the
+// announcement) and for DMs - the bot can't post into a DM between two other people,
+// and in a DM with the bot the giver already gets the DM confirmation.
+func (h *GiveHandler) shouldPostToSource(channelID string) bool {
+	return channelID != "" && channelID != h.announceChannelID && !IsDirectMessage(channelID)
+}
 
+// announcementText renders the recognition message for one recipient's slice of newly
+// inserted events - the same text posts to both the announcement channel and the
+// channel the give was run from.
+func announcementText(giver, recipient string, events []database.KarmaEvent) string {
 	emojiSeen := map[string]bool{}
 	var emojiText []string
 	var reason string
-	ids := make([]string, 0, len(events))
 	for _, ev := range events {
 		if !emojiSeen[ev.Emoji] {
 			emojiSeen[ev.Emoji] = true
 			emojiText = append(emojiText, fmt.Sprintf(":%s:", ev.Emoji))
 		}
 		reason = ev.Reason
-		ids = append(ids, ev.ID)
 	}
 
-	text := fmt.Sprintf("<@%s> gave %s to <@%s>", cmd.UserID, strings.Join(emojiText, " "), recipient)
+	text := fmt.Sprintf("<@%s> gave %s to <@%s>", giver, strings.Join(emojiText, " "), recipient)
 	if reason != "" {
 		text += fmt.Sprintf(" - %s", reason)
+	}
+	return text
+}
+
+// announce posts text to the announcement channel for one recipient's slice of newly
+// inserted events, threading it onto existingTS if the recipient already had an open
+// thread today, or starting a fresh top-level message and backfilling its ts onto
+// those rows otherwise.
+func (h *GiveHandler) announce(ctx context.Context, client *slack.Client, text string, events []database.KarmaEvent, existingTS string) error {
+	ids := make([]string, 0, len(events))
+	for _, ev := range events {
+		ids = append(ids, ev.ID)
 	}
 
 	opts := []slack.MsgOption{slack.MsgOptionText(text, false)}
