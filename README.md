@@ -164,3 +164,23 @@ You would specify the `HEY_SLACK_EMOJI` as: `star:1,clap:2,trophy:3`
 `heyemoji` runs on Bitovi's internal Kubernetes platform (GitOps via Argo CD). The whole app is described by [`deploy/values.yaml`](deploy/values.yaml) — workload, its Postgres dependency, and its domain (`heybitovi.bitovi-tools.com`). Secrets (Slack tokens, session secret) live in the `bitovi-platform/heyemoji-secrets` 1Password item, synced in via External Secrets Operator; see the comments at the top of `deploy/values.yaml` for the exact field labels it expects.
 
 Pushing a `vX.Y.Z` tag runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml): tests, then builds and pushes the image, then writes the new tag back into `deploy/values.yaml`, which Argo CD picks up and rolls out. Every pull request against `main` runs [`.github/workflows/test.yml`](.github/workflows/test.yml).
+
+### Moving the web UI to Keycloak (one-time rollout)
+
+The web UI used to sign in with Google directly; it now signs in through the platform Keycloak (the `sso` dependency in `deploy/values.yaml`). Because `deploy/values.yaml` goes live as soon as it merges to `main`, but the image only changes when a `v*` tag is pushed, roll it out in this order:
+
+1. **Merge the Keycloak PR.** Argo CD applies the new `deploy/values.yaml`. The still-running v0.3.5 image keeps signing in with Google (its `HEY_GOOGLE_*` fields are still in 1Password), and `HEY_GOOGLE_ALLOWED_DOMAIN` is still set, so it stays restricted to bitovi.com. Check that the platform created the client and its Secret:
+   ```
+   kubectl get oidcclient heyemoji-sso -n heyemoji      # READY True
+   kubectl get secret heyemoji-sso-oidc -n heyemoji
+   ```
+2. **Tag a release** (the next `vX.Y.Z` after v0.3.5). The deploy workflow builds the image and writes the tag back into `deploy/values.yaml`, and Argo CD rolls it out. Then:
+   - Visit https://heybitovi.bitovi-tools.com. It should redirect to `keycloak.bitovi-tools.com`, then to Google, and land on the leaderboard.
+   - The pod log shows no `web UI disabled` line.
+   - If the pod sits in `CreateContainerConfigError`, the `heyemoji-sso-oidc` Secret doesn't exist yet. Check the `OIDCClient` from step 1.
+3. **Clean up** once sign-in works:
+   - Remove `HEY_GOOGLE_ALLOWED_DOMAIN` (and its comment) from `deploy/values.yaml`. The Keycloak build doesn't read it.
+   - Delete the `HEY_GOOGLE_CLIENT_ID` and `HEY_GOOGLE_CLIENT_SECRET` fields from the `bitovi-platform/heyemoji-secrets` 1Password item.
+   - Delete the old Google OAuth client (redirect URI `.../auth/google/callback`) in the Google Cloud console.
+
+**Rollback:** until step 3, set `image.tag` in `deploy/values.yaml` back to `v0.3.5` and merge that. The old image signs in with Google again, because its credentials and `HEY_GOOGLE_ALLOWED_DOMAIN` are still in place. The leftover `OIDC_*` env and `sso` client do nothing to it. After step 3, rolling back also means restoring the Google client and those fields.
