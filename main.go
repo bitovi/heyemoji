@@ -42,20 +42,20 @@ func main() {
 		log.Println("HEY_ANNOUNCE_CHANNEL_ID is not set: gives will be recorded but no public announcement will be posted")
 	}
 
-	googleConfigured := cfg.GoogleClientID != "" && cfg.GoogleClientSecret != "" && cfg.SessionSecret != ""
+	oidcConfigured := cfg.OIDCIssuerURL != "" && cfg.OIDCClientID != "" && cfg.OIDCClientSecret != "" && cfg.SessionSecret != ""
 	switch {
 	case cfg.WebAuthDisabled:
 		log.Println("WEB UI AUTH DISABLED (HEY_WEB_AUTH_DISABLED=true): the web UI is reachable by anyone, with no sign-in. For local testing only.")
 		fallthrough
-	case googleConfigured:
+	case oidcConfigured:
 		webServer := web.New(web.Config{
-			BaseURL:             cfg.BaseURL,
-			SessionSecret:       cfg.SessionSecret,
-			GoogleClientID:      cfg.GoogleClientID,
-			GoogleClientSecret:  cfg.GoogleClientSecret,
-			GoogleAllowedDomain: cfg.GoogleAllowedDomain,
-			MaxLeaderEntries:    cfg.MaxLeaderEntries,
-			AuthDisabled:        cfg.WebAuthDisabled,
+			BaseURL:          cfg.BaseURL,
+			SessionSecret:    cfg.SessionSecret,
+			OIDCIssuerURL:    cfg.OIDCIssuerURL,
+			OIDCClientID:     cfg.OIDCClientID,
+			OIDCClientSecret: cfg.OIDCClientSecret,
+			MaxLeaderEntries: cfg.MaxLeaderEntries,
+			AuthDisabled:     cfg.WebAuthDisabled,
 		}, db, api)
 		go func() {
 			if err := webServer.Run(ctx, cfg.HTTPPort); err != nil {
@@ -63,7 +63,7 @@ func main() {
 			}
 		}()
 	default:
-		log.Println("web UI disabled: set HEY_GOOGLE_CLIENT_ID, HEY_GOOGLE_CLIENT_SECRET, and HEY_SESSION_SECRET to enable it (or HEY_WEB_AUTH_DISABLED=true for local testing without Google OAuth)")
+		log.Println("web UI disabled: set OIDC_ISSUER_URL, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, and HEY_SESSION_SECRET to enable it (or HEY_WEB_AUTH_DISABLED=true for local testing without sign-in)")
 	}
 
 	go handleEvents(ctx, client, handlers)

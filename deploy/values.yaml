@@ -8,9 +8,12 @@
 # must match these env var names exactly:
 #   HEY_SLACK_BOT_TOKEN      - Bot User OAuth Token (xoxb-...)
 #   HEY_SLACK_APP_TOKEN      - Socket Mode app-level token (xapp-..., connections:write scope)
-#   HEY_GOOGLE_CLIENT_ID     - Google OAuth Client ID (web UI sign-in)
-#   HEY_GOOGLE_CLIENT_SECRET - Google OAuth Client Secret
 #   HEY_SESSION_SECRET       - random string that signs the web UI's session cookie
+#
+# Web UI sign-in is OIDC against the platform Keycloak. The `sso` dependency
+# below has the platform create Keycloak client heyemoji-sso and inject
+# OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_CLIENT_SECRET - nothing to put in
+# 1Password for it. Keycloak's Google IdP restricts sign-in to bitovi.com.
 #
 # HEY_TEST_MODE and HEY_WEB_AUTH_DISABLED are deliberately pinned to "false"
 # below (not just left unset) so production never silently runs with an
@@ -38,16 +41,22 @@ workloads:
       HEY_SLACK_EMOJI: egg:1,hatching_chick:2,hatched_chick:3
       HEY_SLACK_DAILY_CAP: "9"
       HEY_MAX_LEADER_ENTRIES: "10"
-      HEY_GOOGLE_ALLOWED_DOMAIN: bitovi.com
       HEY_TEST_MODE: "false"
       HEY_WEB_AUTH_DISABLED: "false"
     secrets: op://bitovi-platform/heyemoji-secrets
     uses:
       - db
+      - sso
 dependencies:
   db:
     type: postgres
     storage: 1Gi
     backup: true
+  # Keycloak OIDC client for the web UI (SYSTEMS-947). The platform creates it
+  # and writes its credentials to Secret heyemoji-sso-oidc. The callback is
+  # ${HEY_BASE_URL}/auth/callback.
+  sso:
+    type: oidc
+    redirectPaths: ["/auth/callback"]
 infra:
   hostedZone: bitovi-tools-com

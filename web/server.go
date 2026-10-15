@@ -1,7 +1,7 @@
 // Package web implements the read-only HeyBitovi web UI (leaderboard + recognition
 // feed), served from the same binary/container as the Slack bot. Access is gated by
-// Google Sign-In (OAuth2), not Slack - Bitovi already has Google OAuth set up, so this
-// reuses that instead of building a separate Slack OIDC flow.
+// OIDC sign-in against the platform Keycloak (which brokers Google, restricted to
+// bitovi.com), not Slack.
 package web
 
 import (
@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/slack-go/slack"
 
 	"github.com/bitovi/heyemoji/database"
@@ -22,13 +23,15 @@ import (
 var templatesFS embed.FS
 
 type Config struct {
-	BaseURL             string
-	SessionSecret       string
-	GoogleClientID      string
-	GoogleClientSecret  string
-	GoogleAllowedDomain string // if set, only Google Workspace accounts on this domain (the "hd" claim) may sign in
-	MaxLeaderEntries    int
-	// AuthDisabled skips Google Sign-In entirely and serves pages to anyone - for
+	BaseURL       string
+	SessionSecret string
+	// OIDCIssuerURL is the Keycloak realm, e.g.
+	// https://keycloak.bitovi-tools.com/realms/bitovi (no trailing slash).
+	OIDCIssuerURL    string
+	OIDCClientID     string
+	OIDCClientSecret string
+	MaxLeaderEntries int
+	// AuthDisabled skips sign-in entirely and serves pages to anyone - for
 	// local testing, never for a deployment reachable by anyone but you.
 	AuthDisabled bool
 }
@@ -54,13 +57,16 @@ type Server struct {
 	userCache    map[string]string // Slack user ID -> display name, lazily cached
 	channelCache map[string]string // Slack channel ID -> channel name, lazily cached
 	teamURL      string            // e.g. "https://bitovi.slack.com/" - resolved once via auth.test, empty until then
+
+	verifierOnce sync.Once
+	verifier     *oidc.IDTokenVerifier // built on first sign-in; see idTokenVerifier
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
-	mux.HandleFunc("GET /auth/google/login", s.handleGoogleLogin)
-	mux.HandleFunc("GET /auth/google/callback", s.handleGoogleCallback)
+	mux.HandleFunc("GET /auth/login", s.handleLogin)
+	mux.HandleFunc("GET /auth/callback", s.handleCallback)
 	mux.HandleFunc("GET /auth/logout", s.handleLogout)
 	mux.Handle("GET /app/leaderboard", s.requireAuth(http.HandlerFunc(s.handleLeaderboard)))
 	mux.Handle("GET /app/feed", s.requireAuth(http.HandlerFunc(s.handleFeed)))

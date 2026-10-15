@@ -30,14 +30,14 @@ type Config struct {
 	TestMode bool
 
 	// Web UI config.
-	HTTPPort            string
-	BaseURL             string
-	SessionSecret       string
-	GoogleClientID      string
-	GoogleClientSecret  string
-	GoogleAllowedDomain string // if set, only Google accounts on this Workspace domain (the "hd" claim) may sign in
-	// WebAuthDisabled, when true, skips Google Sign-In entirely and serves the web UI
-	// pages to anyone - for local testing before Google OAuth credentials exist, or
+	HTTPPort         string
+	BaseURL          string
+	SessionSecret    string
+	OIDCIssuerURL    string
+	OIDCClientID     string
+	OIDCClientSecret string
+	// WebAuthDisabled, when true, skips sign-in entirely and serves the web UI
+	// pages to anyone - for local testing before OIDC credentials exist, or
 	// when you just don't want to click through a login while iterating. Not meant
 	// for any deployment reachable by anyone but you.
 	WebAuthDisabled bool
@@ -55,6 +55,13 @@ func readConfig() *Config {
 	// HEY_DATABASE_URL.
 	_ = viper.BindEnv("database_url", "DATABASE_URL")
 
+	// Same for the web UI's OIDC client: the platform's `type: oidc` dependency
+	// (deploy/values.yaml's `dependencies.sso` + `workloads.main.uses: [sso]`)
+	// injects these three under fixed, unprefixed names.
+	_ = viper.BindEnv("oidc_issuer_url", "OIDC_ISSUER_URL")
+	_ = viper.BindEnv("oidc_client_id", "OIDC_CLIENT_ID")
+	_ = viper.BindEnv("oidc_client_secret", "OIDC_CLIENT_SECRET")
+
 	viper.SetDefault("bot_name", "HeyBitovi")
 	viper.SetDefault("database_url", "")
 	viper.SetDefault("slack_bot_token", "")
@@ -67,28 +74,28 @@ func readConfig() *Config {
 	viper.SetDefault("http_port", "8080")
 	viper.SetDefault("base_url", "http://localhost:8080")
 	viper.SetDefault("session_secret", "")
-	viper.SetDefault("google_client_id", "")
-	viper.SetDefault("google_client_secret", "")
-	viper.SetDefault("google_allowed_domain", "")
+	viper.SetDefault("oidc_issuer_url", "")
+	viper.SetDefault("oidc_client_id", "")
+	viper.SetDefault("oidc_client_secret", "")
 	viper.SetDefault("web_auth_disabled", false)
 
 	c := &Config{
-		BotName:             viper.GetString("bot_name"),
-		DatabaseURL:         viper.GetString("database_url"),
-		SlackBotToken:       viper.GetString("slack_bot_token"),
-		SlackAppToken:       viper.GetString("slack_app_token"),
-		SlackEmoji:          viper.GetString("slack_emoji"),
-		SlackDailyCap:       viper.GetInt("slack_daily_cap"),
-		MaxLeaderEntries:    viper.GetInt("max_leader_entries"),
-		AnnounceChannelID:   viper.GetString("announce_channel_id"),
-		TestMode:            viper.GetBool("test_mode"),
-		HTTPPort:            viper.GetString("http_port"),
-		BaseURL:             strings.TrimSuffix(viper.GetString("base_url"), "/"),
-		SessionSecret:       viper.GetString("session_secret"),
-		GoogleClientID:      viper.GetString("google_client_id"),
-		GoogleClientSecret:  viper.GetString("google_client_secret"),
-		GoogleAllowedDomain: viper.GetString("google_allowed_domain"),
-		WebAuthDisabled:     viper.GetBool("web_auth_disabled"),
+		BotName:           viper.GetString("bot_name"),
+		DatabaseURL:       viper.GetString("database_url"),
+		SlackBotToken:     viper.GetString("slack_bot_token"),
+		SlackAppToken:     viper.GetString("slack_app_token"),
+		SlackEmoji:        viper.GetString("slack_emoji"),
+		SlackDailyCap:     viper.GetInt("slack_daily_cap"),
+		MaxLeaderEntries:  viper.GetInt("max_leader_entries"),
+		AnnounceChannelID: viper.GetString("announce_channel_id"),
+		TestMode:          viper.GetBool("test_mode"),
+		HTTPPort:          viper.GetString("http_port"),
+		BaseURL:           strings.TrimSuffix(viper.GetString("base_url"), "/"),
+		SessionSecret:     viper.GetString("session_secret"),
+		OIDCIssuerURL:     strings.TrimSuffix(viper.GetString("oidc_issuer_url"), "/"),
+		OIDCClientID:      viper.GetString("oidc_client_id"),
+		OIDCClientSecret:  viper.GetString("oidc_client_secret"),
+		WebAuthDisabled:   viper.GetBool("web_auth_disabled"),
 	}
 
 	c.SlackEmojiMap = createEmojiValueMap(c.SlackEmoji)

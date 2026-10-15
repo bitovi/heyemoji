@@ -7,14 +7,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 )
 
 const (
@@ -32,21 +31,43 @@ type contextKey struct{ name string }
 
 var emailContextKey = contextKey{"email"}
 
+// Sign-in is OIDC against the platform Keycloak (bitovi realm), which brokers
+// Google and restricts it to bitovi.com accounts (hostedDomain on the realm's
+// Google IdP) - so there's no domain check here. The endpoints are Keycloak's
+// standard paths under the issuer URL rather than fetched from discovery, so
+// startup never depends on Keycloak being reachable.
+func (s *Server) oidcProtocolURL(path string) string {
+	return s.cfg.OIDCIssuerURL + "/protocol/openid-connect/" + path
+}
+
 func (s *Server) oauthConfig() *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     s.cfg.GoogleClientID,
-		ClientSecret: s.cfg.GoogleClientSecret,
-		RedirectURL:  s.cfg.BaseURL + "/auth/google/callback",
-		Scopes:       []string{"openid", "email", "profile"},
-		Endpoint:     google.Endpoint,
+		ClientID:     s.cfg.OIDCClientID,
+		ClientSecret: s.cfg.OIDCClientSecret,
+		RedirectURL:  s.cfg.BaseURL + "/auth/callback",
+		Scopes:       []string{oidc.ScopeOpenID, "email", "profile"},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  s.oidcProtocolURL("auth"),
+			TokenURL: s.oidcProtocolURL("token"),
+		},
 	}
+}
+
+// idTokenVerifier checks the ID token's signature against Keycloak's JWKS
+// (fetched lazily and cached by kid), its issuer, audience, and expiry.
+func (s *Server) idTokenVerifier() *oidc.IDTokenVerifier {
+	s.verifierOnce.Do(func() {
+		keySet := oidc.NewRemoteKeySet(context.Background(), s.oidcProtocolURL("certs"))
+		s.verifier = oidc.NewVerifier(s.cfg.OIDCIssuerURL, keySet, &oidc.Config{ClientID: s.cfg.OIDCClientID})
+	})
+	return s.verifier
 }
 
 func (s *Server) secureCookies() bool {
 	return strings.HasPrefix(s.cfg.BaseURL, "https://")
 }
 
-func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	state := randomToken()
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
@@ -60,7 +81,7 @@ func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.oauthConfig().AuthCodeURL(state), http.StatusFound)
 }
 
-func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	stateCookie, err := r.Cookie(stateCookieName)
 	if err != nil || r.URL.Query().Get("state") == "" || r.URL.Query().Get("state") != stateCookie.Value {
 		http.Error(w, "Invalid or expired sign-in attempt - please try again.", http.StatusBadRequest)
@@ -75,25 +96,47 @@ func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	token, err := s.oauthConfig().Exchange(r.Context(), code)
 	if err != nil {
-		log.Printf("web: google oauth exchange failed: %v", err)
+		log.Printf("web: oidc code exchange failed: %v", err)
 		http.Error(w, "Sign-in failed.", http.StatusInternalServerError)
 		return
 	}
 
-	info, err := fetchGoogleUserInfo(r.Context(), s.oauthConfig().Client(r.Context(), token))
+	rawIDToken, _ := token.Extra("id_token").(string)
+	if rawIDToken == "" {
+		log.Printf("web: oidc token response had no id_token")
+		http.Error(w, "Sign-in failed.", http.StatusInternalServerError)
+		return
+	}
+	idToken, err := s.idTokenVerifier().Verify(r.Context(), rawIDToken)
 	if err != nil {
-		log.Printf("web: fetching google userinfo failed: %v", err)
+		log.Printf("web: id_token verification failed: %v", err)
 		http.Error(w, "Sign-in failed.", http.StatusInternalServerError)
 		return
 	}
 
-	if s.cfg.GoogleAllowedDomain != "" && !strings.EqualFold(info.HD, s.cfg.GoogleAllowedDomain) {
-		log.Printf("web: rejected sign-in from %s (domain %q, want %q)", info.Email, info.HD, s.cfg.GoogleAllowedDomain)
-		http.Error(w, fmt.Sprintf("Sign-in is restricted to %s Google accounts.", s.cfg.GoogleAllowedDomain), http.StatusForbidden)
+	var claims idTokenClaims
+	if err := idToken.Claims(&claims); err != nil {
+		log.Printf("web: decoding id_token claims failed: %v", err)
+		http.Error(w, "Sign-in failed.", http.StatusInternalServerError)
+		return
+	}
+	if claims.Email == "" || !claims.EmailVerified {
+		log.Printf("web: rejected sign-in for %q (email missing or not verified)", claims.Email)
+		http.Error(w, "Sign-in failed: email address is missing or not verified.", http.StatusForbidden)
 		return
 	}
 
-	s.setSession(w, info.Email)
+	// The state cookie is single-use.
+	http.SetCookie(w, &http.Cookie{
+		Name:     stateCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   s.secureCookies(),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+	s.setSession(w, claims.Email)
 	http.Redirect(w, r, "/app/leaderboard", http.StatusFound)
 }
 
@@ -110,30 +153,9 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-type googleUserInfo struct {
-	Email string `json:"email"`
-	HD    string `json:"hd"` // Google Workspace hosted domain, empty for personal @gmail.com accounts
-	Name  string `json:"name"`
-}
-
-func fetchGoogleUserInfo(ctx context.Context, client *http.Client) (*googleUserInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v3/userinfo", nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("userinfo endpoint returned %d", resp.StatusCode)
-	}
-	var info googleUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, err
-	}
-	return &info, nil
+type idTokenClaims struct {
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
 }
 
 func (s *Server) setSession(w http.ResponseWriter, email string) {
@@ -198,12 +220,12 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 		cookie, err := r.Cookie(sessionCookieName)
 		if err != nil {
-			http.Redirect(w, r, "/auth/google/login", http.StatusFound)
+			http.Redirect(w, r, "/auth/login", http.StatusFound)
 			return
 		}
 		claims, ok := s.verifySession(cookie.Value)
 		if !ok {
-			http.Redirect(w, r, "/auth/google/login", http.StatusFound)
+			http.Redirect(w, r, "/auth/login", http.StatusFound)
 			return
 		}
 		ctx := context.WithValue(r.Context(), emailContextKey, claims.Email)

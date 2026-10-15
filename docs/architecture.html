@@ -58,11 +58,11 @@
   <div class="frame">
     <p class="eyebrow">Architecture · HeyBitovi</p>
     <h1>HeyBitovi architecture</h1>
-    <p class="lede">One Go binary, one pod. The bot handles <code>/heybitovi</code> over Slack Socket Mode; the web UI serves the leaderboard and feed behind Google sign-in. Both share the platform-managed Postgres.</p>
+    <p class="lede">One Go binary, one pod. The bot handles <code>/heybitovi</code> over Slack Socket Mode; the web UI serves the leaderboard and feed behind Keycloak sign-in. Both share the platform-managed Postgres.</p>
     <div class="diagram-container">
       <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc">
         <title id="architecture-title">HeyBitovi architecture</title>
-        <desc id="architecture-desc">One Go binary on Bitovi Platform runs a Slack slash-command bot over Socket Mode and a Google-protected web UI, both backed by one Postgres database.</desc>
+        <desc id="architecture-desc">One Go binary on Bitovi Platform runs a Slack slash-command bot over Socket Mode and a Keycloak-protected web UI, both backed by one Postgres database.</desc>
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#04646a"/></marker>
           <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f5532d"/></marker>
@@ -135,8 +135,8 @@
       <rect x="1096" y="448" width="152" height="64" rx="6" fill="rgba(0,42,45,0.03)" stroke="rgba(0,42,45,0.30)" stroke-width="1"/>
       <rect x="1104" y="456" width="28" height="12" rx="2" fill="transparent" stroke="rgba(0,42,45,0.25)" stroke-width="0.8"/>
       <text x="1118" y="465" fill="#687879" font-size="7" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">IDP</text>
-      <text x="1172" y="484" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Google OAuth</text>
-      <text x="1172" y="499" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">hd = bitovi.com</text>
+      <text x="1172" y="484" fill="#002a2d" font-size="12" font-weight="600" font-family="'Inter', system-ui, sans-serif" text-anchor="middle">Keycloak · Google</text>
+      <text x="1172" y="499" fill="#04646a" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">bitovi.com only</text>
       <rect x="64" y="448" width="176" height="64" rx="6" fill="#f4f5f5"/>
       <rect x="64" y="448" width="176" height="64" rx="6" fill="rgba(4,100,106,0.10)" stroke="#687879" stroke-width="1"/>
       <rect x="72" y="456" width="36" height="12" rx="2" fill="transparent" stroke="rgba(104,120,121,0.40)" stroke-width="0.8"/>
