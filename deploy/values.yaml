@@ -41,6 +41,10 @@ workloads:
       HEY_SLACK_EMOJI: egg:1,hatching_chick:2,hatched_chick:3
       HEY_SLACK_DAILY_CAP: "9"
       HEY_MAX_LEADER_ENTRIES: "10"
+      # Unused by v0.3.6+ (Keycloak enforces the domain). Kept until a Keycloak
+      # build is deployed: this file goes live on merge, but the image only
+      # changes on a v* tag, so the old Google-login image still reads it.
+      HEY_GOOGLE_ALLOWED_DOMAIN: bitovi.com
       HEY_TEST_MODE: "false"
       HEY_WEB_AUTH_DISABLED: "false"
     secrets: op://bitovi-platform/heyemoji-secrets
