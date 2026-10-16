@@ -18,8 +18,8 @@ func TestRequireAuth_RedirectsWithoutSession(t *testing.T) {
 	if called {
 		t.Error("handler was called without a valid session, want it blocked")
 	}
-	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/auth/google/login" {
-		t.Errorf("got status %d location %q, want 302 to /auth/google/login", rec.Code, rec.Header().Get("Location"))
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/auth/login" {
+		t.Errorf("got status %d location %q, want 302 to /auth/login", rec.Code, rec.Header().Get("Location"))
 	}
 }
 

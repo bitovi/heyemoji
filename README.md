@@ -106,30 +106,24 @@ Each teammate testing separately should create their own app this way (or share 
 
 ## Web UI Setup
 
-A small read-only web UI (leaderboard + recognition feed) is served from the same container as the bot, at whatever port `HEY_HTTP_PORT` is set to (default `8080`). It's gated by **Google Sign-In** (not Slack) — Bitovi already has Google OAuth set up, so this reuses that instead of building a separate Slack login flow. The web server simply doesn't start until all three of `HEY_GOOGLE_CLIENT_ID`, `HEY_GOOGLE_CLIENT_SECRET`, and `HEY_SESSION_SECRET` are set (you'll see `web UI disabled: ...` in the logs until then) — the Slack bot itself works fine either way.
+A small read-only web UI (leaderboard + recognition feed) is served from the same container as the bot, at whatever port `HEY_HTTP_PORT` is set to (default `8080`). It's gated by **OIDC sign-in against the Bitovi Platform Keycloak** (not Slack), which brokers Google and only lets bitovi.com accounts through. The web server simply doesn't start until all four of `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and `HEY_SESSION_SECRET` are set (you'll see `web UI disabled: ...` in the logs until then) — the Slack bot itself works fine either way.
 
-**For local testing without setting up Google OAuth at all**, set `HEY_WEB_AUTH_DISABLED=true` — this starts the web UI with no sign-in required, reachable by anyone who can reach the port. It logs a loud warning on startup so it can't accidentally stay on unnoticed. Never use this for anything other than local testing.
+In production you don't set the `OIDC_*` variables yourself: the `sso` dependency in [`deploy/values.yaml`](deploy/values.yaml) has the platform create the Keycloak client `heyemoji-sso` (redirect URI `{HEY_BASE_URL}/auth/callback`) and inject all three. Note they have no `HEY_` prefix, like `DATABASE_URL`, because the platform sets those names.
 
-### 1. Create a Google OAuth Client
+**For local testing without a Keycloak client**, set `HEY_WEB_AUTH_DISABLED=true` — this starts the web UI with no sign-in required, reachable by anyone who can reach the port. It logs a loud warning on startup so it can't accidentally stay on unnoticed. Never use this for anything other than local testing.
 
-1. Go to the [Google Cloud Console credentials page](https://console.cloud.google.com/apis/credentials) for the project you want this under (an existing Bitovi project, or a new one).
-2. If you haven't already, configure the **OAuth consent screen** (APIs & Services > OAuth consent screen): User type **Internal** if this is a Google Workspace org (restricts sign-in to your org automatically) or **External** otherwise; app name `HeyBitovi` is fine.
-3. **Create Credentials** > **OAuth client ID** > Application type **Web application**.
-4. Under **Authorized redirect URIs**, add `{HEY_BASE_URL}/auth/google/callback` — for local testing with the defaults below, that's `http://localhost:8080/auth/google/callback`.
-5. Create it, then copy the **Client ID** and **Client Secret**.
+### Running the real sign-in locally
 
-### 2. Configure and run
-
-Add to your `.env`:
+You need a Keycloak client whose redirect URIs include `http://localhost:8080/auth/callback` (ask the platform operator; a staging overlay can add one with `extraRedirectUris`). Then add to your `.env`:
 ```
-HEY_GOOGLE_CLIENT_ID=...
-HEY_GOOGLE_CLIENT_SECRET=...
+OIDC_ISSUER_URL=https://keycloak.bitovi-tools.com/realms/bitovi
+OIDC_CLIENT_ID=...
+OIDC_CLIENT_SECRET=...
 HEY_SESSION_SECRET=some-long-random-string
-HEY_GOOGLE_ALLOWED_DOMAIN=bitovi.com
 ```
-`HEY_SESSION_SECRET` just needs to be a long random string (e.g. `openssl rand -hex 32`) — it signs the login session cookie. `HEY_GOOGLE_ALLOWED_DOMAIN` is optional but recommended: if set, only Google Workspace accounts on that domain can sign in (anyone else gets a 403); leave it unset to allow any Google account (fine if you already locked this down with an **Internal** OAuth consent screen in step 1).
+`HEY_SESSION_SECRET` just needs to be a long random string (e.g. `openssl rand -hex 32`) — it signs the login session cookie.
 
-Restart (`docker-compose up --build`), then visit `http://localhost:8080` — it redirects straight into Google Sign-In, and lands on the leaderboard once you're signed in.
+Restart (`docker-compose up --build`), then visit `http://localhost:8080` — it redirects to Keycloak, then Google, and lands on the leaderboard once you're signed in.
 
 ## Configuration
 
@@ -145,12 +139,12 @@ Restart (`docker-compose up --build`), then visit `http://localhost:8080` — it
 | HEY_MAX_LEADER_ENTRIES  | 10 | No |  Max number of entries contained in the leaderboards |
 | HEY_TEST_MODE | false | No | When `true`, disables the daily give cap entirely (everyone has unlimited points). Every place that would normally show the cap as a number instead says "unlimited (test mode)". Not for production use. |
 | HEY_HTTP_PORT | 8080 | No | Port the web UI listens on |
-| HEY_BASE_URL | http://localhost:8080 | No | Public URL the app is reachable at; used to build the Google OAuth redirect URI |
+| HEY_BASE_URL | http://localhost:8080 | No | Public URL the app is reachable at; used to build the sign-in redirect URI (`{HEY_BASE_URL}/auth/callback`) |
 | HEY_SESSION_SECRET | | Only for web UI | Random string used to sign the web UI's login session cookie |
-| HEY_GOOGLE_CLIENT_ID | | Only for web UI | Google OAuth Client ID |
-| HEY_GOOGLE_CLIENT_SECRET | | Only for web UI | Google OAuth Client Secret |
-| HEY_GOOGLE_ALLOWED_DOMAIN | | No | If set, restricts web UI sign-in to Google Workspace accounts on this domain (e.g. `bitovi.com`) |
-| HEY_WEB_AUTH_DISABLED | false | No | When `true`, the web UI starts with no sign-in required at all, bypassing Google OAuth entirely. For local testing only - never for anything reachable by anyone but you. |
+| OIDC_ISSUER_URL | | Only for web UI | Keycloak realm URL, e.g. `https://keycloak.bitovi-tools.com/realms/bitovi`. Platform-injected in production. |
+| OIDC_CLIENT_ID | | Only for web UI | Keycloak client ID. Platform-injected in production. |
+| OIDC_CLIENT_SECRET | | Only for web UI | Keycloak client secret. Platform-injected in production. |
+| HEY_WEB_AUTH_DISABLED | false | No | When `true`, the web UI starts with no sign-in required at all. For local testing only - never for anything reachable by anyone but you. |
 
 
 ### Specifying Custom Reward Emoji
@@ -167,6 +161,26 @@ You would specify the `HEY_SLACK_EMOJI` as: `star:1,clap:2,trophy:3`
 
 ## Deploy
 
-`heyemoji` runs on Bitovi's internal Kubernetes platform (GitOps via Argo CD). The whole app is described by [`deploy/values.yaml`](deploy/values.yaml) — workload, its Postgres dependency, and its domain (`heybitovi.bitovi-tools.com`). Secrets (Slack/Google tokens, session secret) live in the `bitovi-platform/heyemoji-secrets` 1Password item, synced in via External Secrets Operator; see the comments at the top of `deploy/values.yaml` for the exact field labels it expects.
+`heyemoji` runs on Bitovi's internal Kubernetes platform (GitOps via Argo CD). The whole app is described by [`deploy/values.yaml`](deploy/values.yaml) — workload, its Postgres dependency, and its domain (`heybitovi.bitovi-tools.com`). Secrets (Slack tokens, session secret) live in the `bitovi-platform/heyemoji-secrets` 1Password item, synced in via External Secrets Operator; see the comments at the top of `deploy/values.yaml` for the exact field labels it expects.
 
 Pushing a `vX.Y.Z` tag runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml): tests, then builds and pushes the image, then writes the new tag back into `deploy/values.yaml`, which Argo CD picks up and rolls out. Every pull request against `main` runs [`.github/workflows/test.yml`](.github/workflows/test.yml).
+
+### Moving the web UI to Keycloak (one-time rollout)
+
+The web UI used to sign in with Google directly; it now signs in through the platform Keycloak (the `sso` dependency in `deploy/values.yaml`). Because `deploy/values.yaml` goes live as soon as it merges to `main`, but the image only changes when a `v*` tag is pushed, roll it out in this order:
+
+1. **Merge the Keycloak PR.** Argo CD applies the new `deploy/values.yaml`. The still-running v0.3.5 image keeps signing in with Google (its `HEY_GOOGLE_*` fields are still in 1Password), and `HEY_GOOGLE_ALLOWED_DOMAIN` is still set, so it stays restricted to bitovi.com. Check that the platform created the client and its Secret:
+   ```
+   kubectl get oidcclient heyemoji-sso -n heyemoji      # READY True
+   kubectl get secret heyemoji-sso-oidc -n heyemoji
+   ```
+2. **Tag a release** (the next `vX.Y.Z` after v0.3.5). The deploy workflow builds the image and writes the tag back into `deploy/values.yaml`, and Argo CD rolls it out. Then:
+   - Visit https://heybitovi.bitovi-tools.com. It should redirect to `keycloak.bitovi-tools.com`, then to Google, and land on the leaderboard.
+   - The pod log shows no `web UI disabled` line.
+   - If the pod sits in `CreateContainerConfigError`, the `heyemoji-sso-oidc` Secret doesn't exist yet. Check the `OIDCClient` from step 1.
+3. **Clean up** once sign-in works:
+   - Remove `HEY_GOOGLE_ALLOWED_DOMAIN` (and its comment) from `deploy/values.yaml`. The Keycloak build doesn't read it.
+   - Delete the `HEY_GOOGLE_CLIENT_ID` and `HEY_GOOGLE_CLIENT_SECRET` fields from the `bitovi-platform/heyemoji-secrets` 1Password item.
+   - Delete the old Google OAuth client (redirect URI `.../auth/google/callback`) in the Google Cloud console.
+
+**Rollback:** until step 3, set `image.tag` in `deploy/values.yaml` back to `v0.3.5` and merge that. The old image signs in with Google again, because its credentials and `HEY_GOOGLE_ALLOWED_DOMAIN` are still in place. The leftover `OIDC_*` env and `sso` client do nothing to it. After step 3, rolling back also means restoring the Google client and those fields.
